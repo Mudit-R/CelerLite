@@ -34,12 +34,41 @@ async def lifespan(app: FastAPI):
     """Startup / shutdown lifecycle."""
     global _broker
     setup_logging(config.LOG_LEVEL, config.LOG_FORMAT)
-    _broker = RedisBroker(config)
-    await _broker.connect()
+    embedded_task = None
+    stop_event = asyncio.Event()
+
+    try:
+        redis_broker = RedisBroker(config)
+        await redis_broker.connect()
+        _broker = redis_broker
+        logger.info("redis_connected", url=config.REDIS_URL)
+    except Exception as e:
+        logger.warning(
+            "redis_unavailable_fallback_memory",
+            msg="Redis unreachable at localhost:6379. Operating in zero-dependency Standalone Mode with InMemoryBroker & SQLite.",
+            error=str(e),
+        )
+        from celerlite.broker.memory_broker import InMemoryBroker
+        from celerlite.worker.embedded import run_embedded_worker
+
+        _broker = InMemoryBroker(config)
+        await _broker.connect()
+        embedded_task = asyncio.create_task(
+            run_embedded_worker(_broker, stop_event=stop_event)
+        )
+
     await init_db()
     logger.info("api_started", host=config.API_HOST, port=config.API_PORT)
     yield
-    await _broker.disconnect()
+    stop_event.set()
+    if embedded_task:
+        embedded_task.cancel()
+        try:
+            await embedded_task
+        except (asyncio.CancelledError, Exception):
+            pass
+    if _broker:
+        await _broker.disconnect()
     logger.info("api_stopped")
 
 

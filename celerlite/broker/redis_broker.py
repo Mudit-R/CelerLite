@@ -165,6 +165,36 @@ class RedisBroker(BaseBroker):
         payload = json.dumps(event)
         await self.client.publish(EVENTS_CHANNEL, payload)
 
+    async def subscribe_events(self):
+        """Async generator streaming events from Redis Pub/Sub."""
+        import asyncio
+        pubsub = self.client.pubsub()
+        await pubsub.subscribe(EVENTS_CHANNEL)
+        try:
+            while True:
+                try:
+                    message = await asyncio.wait_for(
+                        pubsub.get_message(ignore_subscribe_messages=True, timeout=0.1),
+                        timeout=1.0,
+                    )
+                    if message and message.get("data"):
+                        data = message["data"]
+                        if isinstance(data, bytes):
+                            data = data.decode("utf-8")
+                        try:
+                            yield json.loads(data)
+                        except json.JSONDecodeError:
+                            pass
+                except asyncio.TimeoutError:
+                    pass
+                await asyncio.sleep(0.05)
+        except asyncio.CancelledError:
+            pass
+        finally:
+            await pubsub.unsubscribe(EVENTS_CHANNEL)
+            await pubsub.aclose()
+
+
     async def recover_stale_tasks(self, queue_name: str, timeout_seconds: int = 30) -> int:
         """
         Scan all processing queues for tasks that have been there longer than

@@ -20,17 +20,15 @@ EVENTS_CHANNEL = "celerlite:events"
 async def websocket_events(websocket: WebSocket):
     """
     Streams real-time task lifecycle events to connected clients.
-    Subscribes to Redis Pub/Sub and forwards each event as JSON.
+    Works seamlessly with both RedisBroker and InMemoryBroker.
     """
     await websocket.accept()
     logger.info("ws_client_connected", client=str(websocket.client))
 
-    # Create a separate Redis connection for pub/sub
-    pubsub_client = aioredis.Redis.from_url(
-        config.REDIS_URL, decode_responses=True
-    )
-    pubsub = pubsub_client.pubsub()
-    await pubsub.subscribe(EVENTS_CHANNEL)
+    broker = get_broker()
+    if not broker:
+        await websocket.close(code=1011, reason="Broker not ready")
+        return
 
     try:
         # Send welcome message
@@ -39,33 +37,16 @@ async def websocket_events(websocket: WebSocket):
             "message": "CelerLite real-time event stream active",
         })
 
-        while True:
-            # Non-blocking get with timeout
-            message = await asyncio.wait_for(
-                pubsub.get_message(ignore_subscribe_messages=True, timeout=0.1),
-                timeout=1.0,
-            )
-            if message and message.get("data"):
-                data = message["data"]
-                if isinstance(data, bytes):
-                    data = data.decode("utf-8")
-                try:
-                    event = json.loads(data)
-                    await websocket.send_json(event)
-                except json.JSONDecodeError:
-                    pass
-
-            # Keep-alive ping
-            await asyncio.sleep(0.05)
+        async for event in broker.subscribe_events():
+            await websocket.send_json(event)
 
     except (WebSocketDisconnect, asyncio.CancelledError):
         logger.info("ws_client_disconnected")
     except Exception as e:
         logger.error("ws_error", error=str(e))
     finally:
-        await pubsub.unsubscribe(EVENTS_CHANNEL)
-        await pubsub_client.aclose()
         try:
             await websocket.close()
         except Exception:
             pass
+
