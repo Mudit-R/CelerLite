@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>CelerLite — Distributed Task Queue Dashboard</title>
+  <meta name="description" content="Real-time monitoring dashboard for CelerLite distributed task queue engine" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+  <link rel="stylesheet" href="/static/styles.css" />
+</head>
+<body>
+  <!-- Header -->
+  <header class="header">
+    <div class="header-left">
+      <div class="logo">
+        <div class="logo-icon">⚡</div>
+        <div>
+          <div class="logo-title">CelerLite</div>
+          <div class="logo-sub">Distributed Task Queue Engine</div>
+        </div>
+      </div>
+    </div>
+    <div class="header-right">
+      <div class="ws-status" id="wsStatus">
+        <div class="status-dot disconnected" id="statusDot"></div>
+        <span id="statusText">Connecting…</span>
+      </div>
+      <div class="uptime" id="uptimeDisplay">Uptime: —</div>
+      <div class="clock" id="clock"></div>
+    </div>
+  </header>
+
+  <!-- Main Content -->
+  <main class="main">
+
+    <!-- KPI Cards -->
+    <section class="kpi-grid">
+      <div class="card kpi-card" id="kpiCompleted">
+        <div class="kpi-icon">✅</div>
+        <div class="kpi-value" id="kpiCompletedVal">—</div>
+        <div class="kpi-label">Tasks Completed</div>
+        <div class="kpi-sub" id="kpiCompletedSub">total</div>
+      </div>
+      <div class="card kpi-card" id="kpiThroughput">
+        <div class="kpi-icon">🚀</div>
+        <div class="kpi-value" id="kpiThroughputVal">—</div>
+        <div class="kpi-label">Throughput</div>
+        <div class="kpi-sub">tasks / sec</div>
+      </div>
+      <div class="card kpi-card" id="kpiWorkers">
+        <div class="kpi-icon">🤖</div>
+        <div class="kpi-value" id="kpiWorkersVal">—</div>
+        <div class="kpi-label">Active Workers</div>
+        <div class="kpi-sub" id="kpiWorkersSub">of total</div>
+      </div>
+      <div class="card kpi-card" id="kpiDLQ">
+        <div class="kpi-icon">☠️</div>
+        <div class="kpi-value" id="kpiDLQVal">—</div>
+        <div class="kpi-label">Dead Letter Queue</div>
+        <div class="kpi-sub">failed permanently</div>
+      </div>
+    </section>
+
+    <!-- Charts Row -->
+    <section class="charts-row">
+      <!-- Task Distribution Donut -->
+      <div class="card chart-card chart-donut">
+        <div class="card-header">
+          <h2 class="card-title">Task Status Distribution</h2>
+          <span class="live-badge">LIVE</span>
+        </div>
+        <div class="donut-wrapper">
+          <canvas id="statusDonut"></canvas>
+          <div class="donut-center" id="donutCenter">
+            <div class="donut-total" id="donutTotal">0</div>
+            <div class="donut-label">total</div>
+          </div>
+        </div>
+        <div class="legend" id="donutLegend"></div>
+      </div>
+
+      <!-- Throughput Line Chart -->
+      <div class="card chart-card chart-line">
+        <div class="card-header">
+          <h2 class="card-title">Throughput (tasks/sec)</h2>
+          <span class="live-badge">LIVE</span>
+        </div>
+        <canvas id="throughputChart"></canvas>
+        <div class="latency-row">
+          <div class="latency-stat">
+            <div class="latency-val" id="latP50">—</div>
+            <div class="latency-label">P50 latency</div>
+          </div>
+          <div class="latency-stat">
+            <div class="latency-val" id="latP99">—</div>
+            <div class="latency-label">P99 latency</div>
+          </div>
+          <div class="latency-stat">
+            <div class="latency-val" id="latAvg">—</div>
+            <div class="latency-label">avg latency</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Live Task Feed -->
+    <section class="card feed-card">
+      <div class="card-header">
+        <h2 class="card-title">Live Task Feed</h2>
+        <div class="feed-controls">
+          <span class="live-badge">LIVE</span>
+          <button class="btn-clear" onclick="clearFeed()">Clear</button>
+        </div>
+      </div>
+      <div class="feed-table-wrapper">
+        <table class="feed-table">
+          <thead>
+            <tr>
+              <th>Time</th>
+              <th>Task Name</th>
+              <th>Event</th>
+              <th>Task ID</th>
+              <th>Worker</th>
+              <th>Duration</th>
+              <th>Queue</th>
+            </tr>
+          </thead>
+          <tbody id="feedBody"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- Workers Table -->
+    <section class="card workers-card">
+      <div class="card-header">
+        <h2 class="card-title">Worker Fleet</h2>
+        <button class="btn-refresh" onclick="loadWorkers()">↻ Refresh</button>
+      </div>
+      <table class="workers-table">
+        <thead>
+          <tr>
+            <th>Worker ID</th>
+            <th>PID</th>
+            <th>Status</th>
+            <th>Current Task</th>
+            <th>Processed</th>
+            <th>Failed</th>
+            <th>Last Heartbeat</th>
+          </tr>
+        </thead>
+        <tbody id="workersBody"></tbody>
+      </table>
+    </section>
+
+    <!-- DLQ Panel -->
+    <section class="card dlq-card">
+      <div class="card-header">
+        <h2 class="card-title">☠️ Dead Letter Queue</h2>
+        <div class="dlq-controls">
+          <button class="btn-replay-all" onclick="replayAll()">↺ Replay All</button>
+          <button class="btn-refresh" onclick="loadDLQ()">↻ Refresh</button>
+        </div>
+      </div>
+      <div id="dlqEmpty" class="dlq-empty" style="display:none">No dead-lettered tasks. System healthy ✓</div>
+      <table class="dlq-table" id="dlqTable">
+        <thead>
+          <tr>
+            <th>Task Name</th>
+            <th>Error</th>
+            <th>Retries</th>
+            <th>Queue</th>
+            <th>Dead At</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody id="dlqBody"></tbody>
+      </table>
+    </section>
+
+    <!-- Quick Submit (for demo/testing) -->
+    <section class="card submit-card">
+      <div class="card-header">
+        <h2 class="card-title">⚡ Submit Task</h2>
+        <span class="badge-demo">DEMO</span>
+      </div>
+      <form class="submit-form" onsubmit="submitTask(event)">
+        <div class="form-row">
+          <div class="form-group">
+            <label>Task Name</label>
+            <input type="text" id="taskName" value="celerlite.demo.add" placeholder="module.task_name" />
+          </div>
+          <div class="form-group">
+            <label>Queue</label>
+            <input type="text" id="taskQueue" value="default" />
+          </div>
+          <div class="form-group">
+            <label>Priority</label>
+            <select id="taskPriority">
+              <option value="0">LOW</option>
+              <option value="1" selected>NORMAL</option>
+              <option value="2">HIGH</option>
+              <option value="3">CRITICAL</option>
+            </select>
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group wide">
+            <label>Args (JSON array)</label>
+            <input type="text" id="taskArgs" value='[1, 2]' placeholder='[arg1, arg2]' />
+          </div>
+          <div class="form-group wide">
+            <label>Kwargs (JSON object)</label>
+            <input type="text" id="taskKwargs" value='{}' placeholder='{"key": "value"}' />
+          </div>
+        </div>
+        <button type="submit" class="btn-submit">Submit Task →</button>
+        <div id="submitResult" class="submit-result"></div>
+      </form>
+    </section>
+
+  </main>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>
