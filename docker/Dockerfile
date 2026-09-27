@@ -10,3 +10,4 @@ COPY . .
 RUN useradd -m -u 1000 celerlite && chown -R celerlite:celerlite /app
 USER celerlite
 EXPOSE 8000
+CMD ["python", "run.py"]

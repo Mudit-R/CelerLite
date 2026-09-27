@@ -49,7 +49,9 @@ async def init_db() -> None:
                 msg="PostgreSQL unreachable at localhost:5432. Falling back to local SQLite database (celerlite_dev.db)",
                 error=str(e),
             )
-            sqlite_url = "sqlite+aiosqlite:///./celerlite_dev.db"
+            import os
+            db_path = "/tmp/celerlite_dev.db" if os.environ.get("VERCEL") else "./celerlite_dev.db"
+            sqlite_url = f"sqlite+aiosqlite:///{db_path}"
             engine = _create_engine(sqlite_url)
             AsyncSessionLocal = async_sessionmaker(
                 engine,
