@@ -107,20 +107,48 @@ def create_app() -> FastAPI:
     from celerlite.api.websocket import router as ws_router
     app.include_router(ws_router)
 
-    # Serve dashboard
+    # Serve dashboard & static assets (robust cross-platform and Vercel serverless resolution)
     import os
-    dashboard_dir = os.path.join(os.path.dirname(__file__), "..", "..", "dashboard")
-    dashboard_dir = os.path.abspath(dashboard_dir)
-    if os.path.isdir(dashboard_dir):
-        app.mount("/static", StaticFiles(directory=dashboard_dir), name="static")
+    from fastapi.responses import HTMLResponse, Response
 
-    @app.get("/", include_in_schema=False)
+    possible_dirs = [
+        os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "api", "dashboard")),
+        os.path.abspath(os.path.join(os.getcwd(), "api", "dashboard")),
+        os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "dashboard")),
+        os.path.abspath(os.path.join(os.getcwd(), "dashboard")),
+        "/var/task/api/dashboard",
+        "/var/task/dashboard",
+    ]
+
+    def get_dashboard_path(filename: str = "index.html") -> str:
+        for d in possible_dirs:
+            p = os.path.join(d, filename)
+            if os.path.isfile(p):
+                return p
+        return ""
+
+    @app.get("/static/{file_path:path}", include_in_schema=False)
+    async def serve_static_file(file_path: str):
+        full_path = get_dashboard_path(file_path)
+        if full_path and os.path.isfile(full_path):
+            mime_type = "text/plain"
+            if file_path.endswith(".css"):
+                mime_type = "text/css"
+            elif file_path.endswith(".js"):
+                mime_type = "application/javascript"
+            elif file_path.endswith(".html"):
+                mime_type = "text/html"
+            with open(full_path, "r", encoding="utf-8", errors="ignore") as f:
+                return Response(content=f.read(), media_type=mime_type)
+        return Response(content="/* asset not found */", media_type="text/plain", status_code=404)
+
+    @app.get("/", response_class=HTMLResponse, include_in_schema=False)
     async def serve_dashboard():
-        import os
-        index_path = os.path.join(dashboard_dir, "index.html")
-        if os.path.isfile(index_path):
-            return FileResponse(index_path)
-        return {"message": "CelerLite API is running", "docs": "/docs"}
+        index_file = get_dashboard_path("index.html")
+        if index_file and os.path.isfile(index_file):
+            with open(index_file, "r", encoding="utf-8", errors="ignore") as f:
+                return HTMLResponse(content=f.read())
+        return HTMLResponse(content="<h1>CelerLite Console</h1><p>API Server is ONLINE. View docs at <a href='/docs'>/docs</a>.</p>")
 
     @app.get("/health")
     async def health(broker: RedisBroker = Depends(get_broker)):

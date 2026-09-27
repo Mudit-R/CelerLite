@@ -1,0 +1,1640 @@
+/* ==========================================================================
+   CelerLite Console — Salesforce Lightning Design System (SLDS) Theme
+   Authentic Salesforce Sales Cloud CRM UI & Lightning Component Experience
+   ========================================================================== */
+
+:root {
+  /* Salesforce Brand Tokens (SLDS) */
+  --slds-brand: #0176d3;
+  --slds-brand-hover: #014486;
+  --slds-brand-active: #032d60;
+  --slds-brand-light: #eaf4fe;
+
+  --slds-header-bg: #032d60;
+  --slds-header-text: #ffffff;
+  --slds-header-search: #ffffff;
+
+  --slds-canvas-bg: #f3f5f8;
+  --slds-surface: #ffffff;
+  --slds-surface-hover: #f8fafc;
+  --slds-border: #dddbda;
+  --slds-border-dark: #c9c7c5;
+  --slds-border-light: #f3f3f3;
+
+  /* Text Hierarchy */
+  --slds-text-primary: #181818;
+  --slds-text-secondary: #444444;
+  --slds-text-muted: #706e6b;
+  --slds-text-placeholder: #999999;
+
+  /* Salesforce State Colors */
+  --slds-success: #2e844a;
+  --slds-success-bg: #eefbf2;
+  --slds-success-border: #91dca8;
+
+  --slds-running: #0176d3;
+  --slds-running-bg: #eef7fc;
+  --slds-running-border: #a8d5fb;
+
+  --slds-error: #ea001e;
+  --slds-error-bg: #fef1f1;
+  --slds-error-border: #f8b8b8;
+
+  --slds-warning: #fe9339;
+  --slds-warning-bg: #fff8f0;
+  --slds-warning-border: #ffd1aa;
+
+  --slds-purple: #7f22fe;
+  --slds-purple-bg: #f7f2ff;
+  --slds-purple-border: #d8c2ff;
+
+  /* Typography */
+  --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  --font-mono: 'JetBrains Mono', 'SFMono-Regular', Consolas, Menlo, Courier, monospace;
+
+  /* Elevation */
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.08);
+  --shadow-md: 0 2px 6px rgba(0, 0, 0, 0.08);
+  --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.12);
+  --shadow-drawer: -6px 0 24px rgba(0, 0, 0, 0.15);
+
+  --radius-sm: 3px;
+  --radius-md: 4px;
+  --radius-lg: 8px;
+}
+
+/* ==========================================================================
+   BASE & RESET
+   ========================================================================== */
+
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body.slds-theme {
+  font-family: var(--font-sans);
+  background-color: var(--slds-canvas-bg);
+  color: var(--slds-text-primary);
+  font-size: 13px;
+  line-height: 1.45;
+  -webkit-font-smoothing: antialiased;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+button {
+  font-family: inherit;
+  cursor: pointer;
+  border: none;
+  background: none;
+}
+
+input, select, textarea {
+  font-family: inherit;
+  font-size: 13px;
+}
+
+a {
+  color: var(--slds-brand);
+  text-decoration: none;
+}
+a:hover {
+  text-decoration: underline;
+}
+
+/* ==========================================================================
+   SALESFORCE GLOBAL UTILITY HEADER
+   ========================================================================== */
+
+.slds-global-header {
+  height: 50px;
+  background-color: var(--slds-header-bg);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 16px;
+  color: var(--slds-header-text);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.14);
+  position: sticky;
+  top: 0;
+  z-index: 100;
+}
+
+.slds-global-header-left {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+/* Salesforce 3x3 App Launcher (Waffle Icon) */
+.slds-app-launcher {
+  width: 32px;
+  height: 32px;
+  display: grid;
+  grid-template-columns: repeat(3, 4px);
+  grid-template-rows: repeat(3, 4px);
+  gap: 3px;
+  align-content: center;
+  justify-content: center;
+  border-radius: var(--radius-sm);
+  background: rgba(255, 255, 255, 0.1);
+  transition: background 0.15s ease;
+}
+.slds-app-launcher:hover {
+  background: rgba(255, 255, 255, 0.22);
+}
+.waffle-dot {
+  width: 4px;
+  height: 4px;
+  background-color: #ffffff;
+  border-radius: 1px;
+}
+
+/* App Identity */
+.slds-app-identity {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.slds-cloud-icon {
+  color: #38a6f5;
+  display: flex;
+  align-items: center;
+}
+.slds-app-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.slds-app-name {
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: -0.2px;
+  color: #ffffff;
+}
+.slds-cloud-badge {
+  font-size: 10px;
+  font-weight: 700;
+  background-color: rgba(56, 166, 245, 0.2);
+  color: #8ed0ff;
+  padding: 2px 7px;
+  border-radius: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+}
+
+/* Global Search Bar (Salesforce Pill) */
+.slds-global-search {
+  flex: 0 1 520px;
+  margin: 0 24px;
+}
+.slds-search-box {
+  background-color: #ffffff;
+  border-radius: 20px;
+  display: flex;
+  align-items: center;
+  padding: 0 12px;
+  height: 32px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
+  transition: box-shadow 0.15s ease;
+}
+.slds-search-box:focus-within {
+  box-shadow: 0 0 0 2px #38a6f5;
+}
+.search-icon {
+  color: var(--slds-text-muted);
+  margin-right: 8px;
+  flex-shrink: 0;
+}
+.slds-search-box input {
+  flex: 1;
+  border: none;
+  outline: none;
+  background: transparent;
+  color: var(--slds-text-primary);
+  font-size: 12.5px;
+}
+.slds-search-box input::placeholder {
+  color: var(--slds-text-muted);
+}
+.search-shortcut {
+  font-size: 10.5px;
+  font-weight: 600;
+  color: var(--slds-text-muted);
+  background: #f3f5f8;
+  border: 1px solid var(--slds-border);
+  padding: 1px 5px;
+  border-radius: 3px;
+}
+
+/* Header Right Actions */
+.slds-global-header-right {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.slds-cluster-indicator {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 4px 10px;
+  background: rgba(255, 255, 255, 0.12);
+  border-radius: 12px;
+  font-size: 11.5px;
+  color: #eaf4fe;
+}
+.slds-pulse-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background-color: #31e87d;
+  box-shadow: 0 0 8px rgba(49, 232, 125, 0.6);
+  animation: sldsPulse 2s infinite;
+}
+@keyframes sldsPulse {
+  0% { transform: scale(0.95); opacity: 0.8; }
+  50% { transform: scale(1.15); opacity: 1; }
+  100% { transform: scale(0.95); opacity: 0.8; }
+}
+
+.slds-icon-btn {
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius-sm);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #ffffff;
+  font-size: 14px;
+  position: relative;
+  transition: background 0.15s ease;
+}
+.slds-icon-btn:hover {
+  background: rgba(255, 255, 255, 0.16);
+}
+
+.notif-badge {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  background-color: var(--slds-error);
+  color: #ffffff;
+  font-size: 9.5px;
+  font-weight: 700;
+  border-radius: 8px;
+  padding: 0 4px;
+  min-width: 14px;
+  height: 14px;
+  line-height: 14px;
+  text-align: center;
+}
+
+.slds-user-avatar {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: #0176d3;
+  color: #ffffff;
+  font-weight: 700;
+  font-size: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 2px solid rgba(255, 255, 255, 0.4);
+  cursor: pointer;
+}
+
+/* ==========================================================================
+   SALESFORCE LIGHTNING NAVIGATION BAR (Object Tabs)
+   ========================================================================= */
+
+.slds-nav-bar {
+  background-color: #ffffff;
+  border-bottom: 1px solid var(--slds-border);
+  padding: 0 16px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
+}
+
+.slds-nav-tabs {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.slds-nav-tabs::-webkit-scrollbar {
+  display: none;
+}
+
+.slds-nav-tab {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 10px 14px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--slds-text-secondary);
+  border-bottom: 3px solid transparent;
+  white-space: nowrap;
+  transition: all 0.15s ease;
+  position: relative;
+}
+.slds-nav-tab:hover {
+  color: var(--slds-brand);
+  background-color: #f8fafc;
+}
+.slds-nav-tab.active {
+  color: var(--slds-brand);
+  font-weight: 600;
+  border-bottom-color: var(--slds-brand);
+  background-color: #ffffff;
+}
+
+.tab-icon {
+  font-size: 14px;
+}
+.tab-count-badge {
+  font-size: 10px;
+  font-weight: 700;
+  background-color: #ea001e;
+  color: #ffffff;
+  padding: 1px 6px;
+  border-radius: 10px;
+}
+
+/* ==========================================================================
+   MAIN APP CANVAS CONTAINER
+   ========================================================================== */
+
+.slds-main-container {
+  flex: 1;
+  padding: 16px 20px 32px 20px;
+  max-width: 1920px;
+  margin: 0 auto;
+  width: 100%;
+}
+
+.slds-tab-panel {
+  display: none;
+}
+.slds-tab-panel.active {
+  display: block;
+}
+
+/* ==========================================================================
+   SALESFORCE LIGHTNING PAGE HEADER (RECORD / LIST HEADER)
+   ========================================================================== */
+
+.slds-page-header {
+  background-color: #ffffff;
+  border: 1px solid var(--slds-border);
+  border-radius: var(--radius-md) var(--radius-md) 0 0;
+  padding: 16px 20px;
+  box-shadow: var(--shadow-sm);
+  margin-bottom: 0;
+}
+
+.slds-page-header-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 16px;
+}
+
+.slds-media {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+/* Square Object Icon */
+.slds-object-icon {
+  width: 40px;
+  height: 40px;
+  border-radius: var(--radius-md);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #ffffff;
+  font-size: 18px;
+  flex-shrink: 0;
+}
+.object-task {
+  background: linear-gradient(135deg, #e26005 0%, #ff5388 100%);
+  box-shadow: 0 2px 6px rgba(226, 96, 5, 0.3);
+}
+.object-queue {
+  background: linear-gradient(135deg, #0176d3 0%, #00b4d8 100%);
+}
+.object-worker {
+  background: linear-gradient(135deg, #107c41 0%, #2e844a 100%);
+}
+.object-dlq {
+  background: linear-gradient(135deg, #ea001e 0%, #b30017 100%);
+}
+.object-dashboard {
+  background: linear-gradient(135deg, #7f22fe 0%, #9055fd 100%);
+}
+.object-setup {
+  background: linear-gradient(135deg, #514f4d 0%, #706e6b 100%);
+}
+
+.slds-media-body {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.slds-breadcrumb-header {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  color: var(--slds-text-muted);
+  letter-spacing: 0.5px;
+}
+
+.slds-page-title {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--slds-text-primary);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.slds-title-dropdown-icon {
+  font-size: 10px;
+  color: var(--slds-brand);
+  cursor: pointer;
+}
+
+.slds-header-meta {
+  font-size: 12px;
+  color: var(--slds-text-muted);
+}
+
+/* Action Buttons */
+.slds-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.slds-dropdown-wrapper select,
+.slds-select {
+  height: 32px;
+  padding: 0 10px;
+  background-color: #ffffff;
+  border: 1px solid var(--slds-border-dark);
+  border-radius: var(--radius-sm);
+  color: var(--slds-text-primary);
+  font-size: 12.5px;
+  outline: none;
+  transition: border-color 0.15s ease;
+}
+.slds-dropdown-wrapper select:focus,
+.slds-select:focus {
+  border-color: var(--slds-brand);
+  box-shadow: 0 0 0 1px var(--slds-brand);
+}
+
+.slds-btn {
+  height: 32px;
+  padding: 0 14px;
+  font-size: 13px;
+  font-weight: 500;
+  border-radius: var(--radius-sm);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  white-space: nowrap;
+  transition: all 0.15s ease;
+}
+.slds-btn-neutral {
+  background-color: #ffffff;
+  border: 1px solid var(--slds-border-dark);
+  color: var(--slds-brand);
+}
+.slds-btn-neutral:hover {
+  background-color: #f8fafc;
+  border-color: var(--slds-brand);
+}
+
+.slds-btn-brand {
+  background-color: var(--slds-brand);
+  border: 1px solid var(--slds-brand);
+  color: #ffffff;
+  font-weight: 600;
+  box-shadow: 0 1px 2px rgba(1, 118, 211, 0.3);
+}
+.slds-btn-brand:hover {
+  background-color: var(--slds-brand-hover);
+  border-color: var(--slds-brand-hover);
+}
+
+.slds-btn-destructive {
+  background-color: var(--slds-error);
+  border: 1px solid var(--slds-error);
+  color: #ffffff;
+}
+.slds-btn-destructive:hover {
+  background-color: #b30017;
+}
+
+.slds-btn-block {
+  width: 100%;
+}
+
+.slds-btn-xs {
+  font-size: 11px;
+  padding: 2px 8px;
+  border: 1px solid var(--slds-border);
+  border-radius: var(--radius-sm);
+  background: #ffffff;
+  color: var(--slds-brand);
+}
+.slds-btn-xs:hover {
+  background: #f8fafc;
+}
+
+/* ==========================================================================
+   SALESFORCE SALES PATH (CHEVRON LIFECYCLE TRACKER)
+   ========================================================================== */
+
+.slds-path-card {
+  background-color: #ffffff;
+  border-left: 1px solid var(--slds-border);
+  border-right: 1px solid var(--slds-border);
+  border-bottom: 1px solid var(--slds-border);
+  padding: 12px 20px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.slds-path-label {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--slds-text-muted);
+  letter-spacing: 0.5px;
+  white-space: nowrap;
+}
+
+.slds-path-track {
+  display: flex;
+  align-items: center;
+  flex: 1;
+  overflow: hidden;
+  border-radius: 18px;
+  background-color: #f3f5f8;
+  border: 1px solid var(--slds-border);
+}
+
+.slds-path-step {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: 32px;
+  padding: 0 16px;
+  font-size: 11.5px;
+  font-weight: 600;
+  position: relative;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.2s ease;
+  user-select: none;
+}
+
+/* Chevron arrow separator using CSS clip-path */
+.slds-path-step::after {
+  content: '';
+  position: absolute;
+  right: -10px;
+  top: 0;
+  width: 0;
+  height: 0;
+  border-top: 16px solid transparent;
+  border-bottom: 16px solid transparent;
+  border-left: 10px solid #f3f5f8;
+  z-index: 2;
+}
+
+/* Step Complete (Salesforce Green) */
+.slds-path-step.step-complete {
+  background-color: var(--slds-success);
+  color: #ffffff;
+}
+.slds-path-step.step-complete::after {
+  border-left-color: var(--slds-success);
+}
+.path-check {
+  font-weight: 700;
+  font-size: 12px;
+}
+
+/* Step Active (Salesforce Brand Blue) */
+.slds-path-step.step-active {
+  background-color: var(--slds-brand);
+  color: #ffffff;
+  font-weight: 700;
+}
+.slds-path-step.step-active::after {
+  border-left-color: var(--slds-brand);
+}
+
+/* Step Upcoming */
+.slds-path-step.step-upcoming {
+  background-color: #f3f5f8;
+  color: var(--slds-text-muted);
+}
+.slds-path-step.step-upcoming::after {
+  border-left-color: #f3f5f8;
+}
+
+/* Step Failed */
+.slds-path-step.step-failed {
+  background-color: var(--slds-error);
+  color: #ffffff;
+}
+.slds-path-step.step-failed::after {
+  border-left-color: var(--slds-error);
+}
+
+.slds-path-step:last-child::after {
+  display: none;
+}
+
+/* ==========================================================================
+   TWO-COLUMN WORKSPACE: DATA TABLE + EINSTEIN AI COPILOT
+   ========================================================================== */
+
+.slds-split-workspace {
+  display: flex;
+  gap: 16px;
+  margin-top: 16px;
+  align-items: flex-start;
+}
+
+.slds-main-table-card {
+  flex: 1;
+  background-color: #ffffff;
+  border: 1px solid var(--slds-border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-sm);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.slds-table-container {
+  overflow-x: auto;
+}
+
+.slds-table {
+  width: 100%;
+  border-collapse: collapse;
+  text-align: left;
+}
+
+.slds-table thead {
+  background-color: #fafaf9;
+  border-bottom: 1px solid var(--slds-border);
+}
+
+.slds-table th {
+  padding: 10px 14px;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  color: var(--slds-text-muted);
+  letter-spacing: 0.5px;
+  border-bottom: 1px solid var(--slds-border);
+  white-space: nowrap;
+}
+
+.slds-table tbody tr {
+  border-bottom: 1px solid var(--slds-border-light);
+  transition: background-color 0.12s ease;
+  cursor: pointer;
+}
+.slds-table tbody tr:hover {
+  background-color: #f3f5f8;
+}
+
+.slds-table td {
+  padding: 10px 14px;
+  font-size: 13px;
+  vertical-align: middle;
+  color: var(--slds-text-primary);
+}
+
+/* Table cell styling */
+.task-name-cell {
+  font-weight: 600;
+  color: var(--slds-brand);
+}
+.task-id-code {
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  color: #0176d3;
+}
+.task-id-code:hover {
+  text-decoration: underline;
+}
+
+/* Status Pills */
+.slds-status-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  border: 1px solid transparent;
+}
+.status-success {
+  background-color: var(--slds-success-bg);
+  color: var(--slds-success);
+  border-color: var(--slds-success-border);
+}
+.status-running {
+  background-color: var(--slds-running-bg);
+  color: var(--slds-running);
+  border-color: var(--slds-running-border);
+}
+.status-failed {
+  background-color: var(--slds-error-bg);
+  color: var(--slds-error);
+  border-color: var(--slds-error-border);
+}
+.status-dlq {
+  background-color: var(--slds-purple-bg);
+  color: var(--slds-purple);
+  border-color: var(--slds-purple-border);
+}
+.status-pending {
+  background-color: var(--slds-warning-bg);
+  color: #b86200;
+  border-color: var(--slds-warning-border);
+}
+
+.queue-tag {
+  font-size: 11px;
+  background-color: #f3f5f8;
+  border: 1px solid var(--slds-border);
+  padding: 2px 6px;
+  border-radius: var(--radius-sm);
+  color: var(--slds-text-secondary);
+}
+
+.priority-tag {
+  font-size: 10.5px;
+  font-weight: 700;
+  padding: 2px 6px;
+  border-radius: 3px;
+}
+.priority-critical {
+  background: #fef1f1;
+  color: #ea001e;
+  border: 1px solid #f8b8b8;
+}
+.priority-high {
+  background: #fff8f0;
+  color: #b86200;
+  border: 1px solid #ffd1aa;
+}
+.priority-normal {
+  background: #f3f5f8;
+  color: #444444;
+  border: 1px solid #dddbda;
+}
+.priority-low {
+  background: #f8fafc;
+  color: #706e6b;
+  border: 1px solid #ecebea;
+}
+
+.duration-val, .time-val {
+  font-size: 12px;
+  color: var(--slds-text-muted);
+}
+
+/* Empty State */
+.slds-empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 48px 24px;
+  text-align: center;
+}
+.slds-empty-icon {
+  font-size: 32px;
+  margin-bottom: 8px;
+}
+.slds-empty-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--slds-text-primary);
+  margin-bottom: 4px;
+}
+.slds-empty-sub {
+  font-size: 12.5px;
+  color: var(--slds-text-muted);
+}
+
+/* Table Footer */
+.slds-table-footer {
+  padding: 10px 16px;
+  background-color: #fafaf9;
+  border-top: 1px solid var(--slds-border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 12px;
+  color: var(--slds-text-muted);
+}
+.slds-engine-pill {
+  font-size: 10.5px;
+  font-weight: 600;
+  color: #0176d3;
+  background: #eaf4fe;
+  padding: 2px 8px;
+  border-radius: 10px;
+}
+
+/* ==========================================================================
+   SALESFORCE EINSTEIN AI / AGENTFORCE TASK INTELLIGENCE WIDGET
+   ========================================================================== */
+
+.slds-copilot-card {
+  width: 320px;
+  flex-shrink: 0;
+  background: #ffffff;
+  border: 1px solid var(--slds-border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-sm);
+  overflow: hidden;
+}
+
+.copilot-header {
+  background: linear-gradient(135deg, #f0f7ff 0%, #f7f2ff 100%);
+  border-bottom: 1px solid var(--slds-border);
+  padding: 14px 16px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.copilot-badge {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.copilot-sparkle {
+  font-size: 16px;
+}
+.copilot-title {
+  font-size: 13.5px;
+  font-weight: 700;
+  color: #032d60;
+}
+.copilot-tag {
+  font-size: 9.5px;
+  font-weight: 800;
+  color: var(--slds-purple);
+  background: rgba(127, 34, 254, 0.12);
+  padding: 2px 6px;
+  border-radius: 10px;
+  letter-spacing: 0.5px;
+}
+
+.copilot-body {
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.copilot-metric-box {
+  background-color: #fafaf9;
+  border: 1px solid var(--slds-border);
+  border-radius: var(--radius-sm);
+  padding: 12px;
+}
+.metric-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin-bottom: 6px;
+}
+.metric-label {
+  font-size: 10.5px;
+  font-weight: 700;
+  color: var(--slds-text-muted);
+}
+.metric-score {
+  font-size: 16px;
+  font-weight: 800;
+  color: var(--slds-success);
+}
+.slds-progress-bar {
+  height: 6px;
+  background-color: #dddbda;
+  border-radius: 3px;
+  overflow: hidden;
+}
+.slds-progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #2e844a 0%, #0176d3 100%);
+  border-radius: 3px;
+  transition: width 0.3s ease;
+}
+
+.copilot-insight {
+  display: flex;
+  gap: 10px;
+  background: #f8fafc;
+  border-left: 3px solid var(--slds-brand);
+  padding: 10px 12px;
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+}
+.insight-icon {
+  font-size: 16px;
+  flex-shrink: 0;
+}
+.insight-title {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--slds-text-primary);
+  margin-bottom: 2px;
+}
+.insight-desc {
+  font-size: 11.5px;
+  color: var(--slds-text-secondary);
+  line-height: 1.35;
+}
+
+.copilot-actions-title {
+  font-size: 10.5px;
+  font-weight: 700;
+  color: var(--slds-text-muted);
+  margin-bottom: 8px;
+}
+.copilot-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+/* ==========================================================================
+   QUEUE GRID & CARDS
+   ========================================================================== */
+
+.slds-queue-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 16px;
+  margin-top: 16px;
+}
+
+.queue-card {
+  background-color: #ffffff;
+  border: 1px solid var(--slds-border);
+  border-radius: var(--radius-md);
+  padding: 16px;
+  box-shadow: var(--shadow-sm);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.queue-card-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.queue-card-name {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--slds-text-primary);
+}
+
+.queue-priority-breakdown {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 6px;
+}
+.qp-item {
+  background: #f8fafc;
+  border: 1px solid var(--slds-border);
+  border-radius: var(--radius-sm);
+  padding: 6px 8px;
+  text-align: center;
+}
+.qp-label {
+  font-size: 9.5px;
+  font-weight: 700;
+  color: var(--slds-text-muted);
+  display: block;
+}
+.qp-val {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--slds-text-primary);
+}
+
+/* ==========================================================================
+   EXECUTIVE DASHBOARDS & REPORTS
+   ========================================================================== */
+
+.slds-kpi-row {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 16px;
+  margin: 16px 0;
+}
+.slds-kpi-card {
+  background: #ffffff;
+  border: 1px solid var(--slds-border);
+  border-radius: var(--radius-md);
+  padding: 16px;
+  box-shadow: var(--shadow-sm);
+}
+.kpi-header {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  color: var(--slds-text-muted);
+  margin-bottom: 6px;
+}
+.kpi-val {
+  font-size: 26px;
+  font-weight: 800;
+  color: var(--slds-text-primary);
+  line-height: 1.1;
+  margin-bottom: 4px;
+}
+.kpi-meta {
+  font-size: 11px;
+  color: var(--slds-text-muted);
+}
+.text-emerald {
+  color: var(--slds-success) !important;
+}
+.text-blue {
+  color: var(--slds-brand) !important;
+}
+.text-rose {
+  color: var(--slds-error) !important;
+}
+
+.slds-dashboard-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+}
+.chart-span-2 {
+  grid-column: span 2;
+}
+
+.slds-chart-card {
+  background: #ffffff;
+  border: 1px solid var(--slds-border);
+  border-radius: var(--radius-md);
+  padding: 16px;
+  box-shadow: var(--shadow-sm);
+  display: flex;
+  flex-direction: column;
+}
+.chart-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 14px;
+}
+.chart-title {
+  font-size: 11.5px;
+  font-weight: 700;
+  color: var(--slds-text-muted);
+}
+.chart-badge {
+  font-size: 10px;
+  font-weight: 700;
+  color: #0176d3;
+  background: #eaf4fe;
+  padding: 2px 6px;
+  border-radius: 8px;
+}
+.chart-wrapper {
+  height: 240px;
+  position: relative;
+}
+
+/* ==========================================================================
+   SETTINGS & CLUSTER SETUP
+   ========================================================================== */
+
+.slds-settings-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 16px;
+  margin-top: 16px;
+}
+.slds-settings-card {
+  background: #ffffff;
+  border: 1px solid var(--slds-border);
+  border-radius: var(--radius-md);
+  padding: 20px;
+  box-shadow: var(--shadow-sm);
+}
+.settings-title {
+  font-size: 15px;
+  font-weight: 700;
+  color: #032d60;
+  margin-bottom: 14px;
+  border-bottom: 1px solid var(--slds-border-light);
+  padding-bottom: 8px;
+}
+.settings-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 9px 0;
+  border-bottom: 1px solid #f8fafc;
+  font-size: 12.5px;
+}
+.s-key {
+  color: var(--slds-text-secondary);
+  font-weight: 500;
+}
+.s-val {
+  color: var(--slds-text-primary);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+/* ==========================================================================
+   SALESFORCE LIGHTNING SLIDE-OVER RECORD DRAWER
+   ========================================================================== */
+
+.slds-drawer-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.4);
+  backdrop-filter: blur(2px);
+  z-index: 200;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.25s ease;
+}
+.slds-drawer-backdrop.open {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.slds-drawer {
+  position: fixed;
+  top: 0;
+  right: -580px;
+  width: 560px;
+  height: 100vh;
+  background-color: #ffffff;
+  box-shadow: var(--shadow-drawer);
+  z-index: 210;
+  display: flex;
+  flex-direction: column;
+  transition: right 0.28s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.slds-drawer.open {
+  right: 0;
+}
+
+.drawer-header {
+  padding: 18px 20px 0 20px;
+  background-color: #fafaf9;
+  border-bottom: 1px solid var(--slds-border);
+}
+.drawer-header-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+.drawer-header-title-box {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.slds-drawer-badge {
+  font-size: 11px;
+  font-weight: 700;
+  padding: 3px 8px;
+  border-radius: 12px;
+  text-transform: uppercase;
+}
+.drawer-record-name {
+  font-size: 17px;
+  font-weight: 700;
+  color: #032d60;
+}
+.slds-close-btn {
+  font-size: 18px;
+  color: var(--slds-text-muted);
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-sm);
+}
+.slds-close-btn:hover {
+  background-color: #e5e5e5;
+  color: var(--slds-text-primary);
+}
+
+.drawer-record-id-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--slds-text-muted);
+  margin-bottom: 14px;
+}
+.id-value {
+  font-family: var(--font-mono);
+  color: var(--slds-text-primary);
+  background: #ffffff;
+  border: 1px solid var(--slds-border);
+  padding: 2px 6px;
+  border-radius: 3px;
+  font-size: 11.5px;
+}
+.slds-copy-icon-btn {
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.drawer-tab-bar {
+  display: flex;
+  gap: 2px;
+  border-bottom: 1px solid transparent;
+}
+.d-tab {
+  padding: 8px 12px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--slds-text-secondary);
+  border-bottom: 3px solid transparent;
+  transition: all 0.15s ease;
+}
+.d-tab:hover {
+  color: var(--slds-brand);
+}
+.d-tab.active {
+  color: var(--slds-brand);
+  font-weight: 600;
+  border-bottom-color: var(--slds-brand);
+}
+
+.drawer-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 20px;
+}
+.drawer-tab-content {
+  display: none;
+}
+.drawer-tab-content.active {
+  display: block;
+}
+
+/* Activity Timeline */
+.slds-timeline {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  position: relative;
+  padding-left: 28px;
+}
+.slds-timeline::before {
+  content: '';
+  position: absolute;
+  left: 9px;
+  top: 10px;
+  bottom: 10px;
+  width: 2px;
+  background-color: var(--slds-border);
+}
+.timeline-step {
+  position: relative;
+  display: flex;
+  gap: 12px;
+}
+.t-icon {
+  position: absolute;
+  left: -28px;
+  top: 0;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background-color: #ffffff;
+  border: 2px solid var(--slds-border);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--slds-text-muted);
+}
+.t-icon.done {
+  border-color: var(--slds-success);
+  background-color: var(--slds-success);
+  color: #ffffff;
+}
+.t-icon.active {
+  border-color: var(--slds-brand);
+  background-color: var(--slds-brand);
+  color: #ffffff;
+}
+.t-icon.error {
+  border-color: var(--slds-error);
+  background-color: var(--slds-error);
+  color: #ffffff;
+}
+.t-details {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.t-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--slds-text-primary);
+}
+.t-time {
+  font-size: 11px;
+  color: var(--slds-text-muted);
+}
+.t-desc {
+  font-size: 12px;
+  color: var(--slds-text-secondary);
+}
+
+/* Code box */
+.slds-code-box {
+  background: #f8fafc;
+  border: 1px solid var(--slds-border);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+}
+.code-box-header {
+  padding: 8px 12px;
+  background: #fafaf9;
+  border-bottom: 1px solid var(--slds-border);
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--slds-text-muted);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.slds-json-code {
+  padding: 12px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 1.5;
+  color: #1e293b;
+  overflow-x: auto;
+  white-space: pre;
+}
+.slds-json-code.error-code {
+  color: #ea001e;
+  background-color: #fff9f9;
+}
+.slds-error-callout {
+  background-color: #fef1f1;
+  border: 1px solid #f8b8b8;
+  border-left: 4px solid #ea001e;
+  padding: 10px 14px;
+  border-radius: var(--radius-sm);
+  color: #ea001e;
+  font-weight: 500;
+  font-size: 12.5px;
+  margin-bottom: 12px;
+}
+
+.slds-detail-fields {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 12px;
+}
+.field-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 0;
+  border-bottom: 1px solid #f3f5f8;
+  font-size: 12.5px;
+}
+.f-label {
+  color: var(--slds-text-muted);
+  font-weight: 500;
+}
+.f-val {
+  font-weight: 600;
+  color: var(--slds-text-primary);
+}
+
+.drawer-footer {
+  padding: 14px 20px;
+  background-color: #fafaf9;
+  border-top: 1px solid var(--slds-border);
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+/* ==========================================================================
+   SALESFORCE LIGHTNING "NEW TASK" MODAL
+   ========================================================================== */
+
+.slds-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(2px);
+  z-index: 300;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s ease;
+}
+.slds-modal-backdrop.open {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.slds-modal-card {
+  width: 580px;
+  max-width: 92vw;
+  background: #ffffff;
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-lg);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  animation: sldsModalSlide 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+}
+@keyframes sldsModalSlide {
+  from { transform: translateY(-20px) scale(0.98); opacity: 0; }
+  to { transform: translateY(0) scale(1); opacity: 1; }
+}
+
+.modal-card-header {
+  padding: 16px 20px;
+  background-color: #fafaf9;
+  border-bottom: 1px solid var(--slds-border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.modal-card-title {
+  font-size: 17px;
+  font-weight: 700;
+  color: #032d60;
+}
+.slds-modal-close {
+  font-size: 16px;
+  color: var(--slds-text-muted);
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-sm);
+}
+.slds-modal-close:hover {
+  background-color: #e5e5e5;
+}
+
+.modal-card-body {
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  max-height: 70vh;
+  overflow-y: auto;
+}
+
+.slds-form-element {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.slds-form-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--slds-text-secondary);
+}
+.slds-form-label .required {
+  color: var(--slds-error);
+}
+
+.slds-input-group {
+  display: flex;
+  gap: 6px;
+}
+
+.slds-input, .slds-textarea {
+  width: 100%;
+  padding: 6px 10px;
+  background-color: #ffffff;
+  border: 1px solid var(--slds-border-dark);
+  border-radius: var(--radius-sm);
+  color: var(--slds-text-primary);
+  font-size: 12.5px;
+  outline: none;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+.slds-input:focus, .slds-textarea:focus {
+  border-color: var(--slds-brand);
+  box-shadow: 0 0 0 1px var(--slds-brand);
+}
+
+.slds-preset-select {
+  flex: 0 0 160px;
+}
+
+.slds-form-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.modal-card-footer {
+  padding: 14px 20px;
+  background-color: #fafaf9;
+  border-top: 1px solid var(--slds-border);
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+/* ==========================================================================
+   TOAST NOTIFICATION BANNER
+   ========================================================================== */
+
+.slds-toast-container {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  z-index: 400;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  pointer-events: none;
+}
+
+.slds-toast {
+  pointer-events: auto;
+  min-width: 300px;
+  max-width: 440px;
+  background-color: #032d60;
+  color: #ffffff;
+  padding: 12px 16px;
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow-lg);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 13px;
+  animation: sldsToastSlide 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+@keyframes sldsToastSlide {
+  from { transform: translateY(20px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+
+.slds-toast.toast-success {
+  background-color: var(--slds-success);
+}
+.slds-toast.toast-error {
+  background-color: var(--slds-error);
+}
+.slds-toast.toast-info {
+  background-color: #0176d3;
+}
