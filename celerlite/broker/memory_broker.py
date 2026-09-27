@@ -103,7 +103,7 @@ class InMemoryBroker(BaseBroker):
         self._subscribers: set[asyncio.Queue] = set()
         self._new_item_event = asyncio.Event()
         self._client = MockRedisClient(self)
-        self._connected = False
+        self._connected = True
 
     async def connect(self) -> None:
         self._connected = True

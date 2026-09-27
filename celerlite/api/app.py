@@ -2,6 +2,8 @@
 
 import asyncio
 import json
+import os
+import sys
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
@@ -41,28 +43,42 @@ async def lifespan(app: FastAPI):
     embedded_task = None
     stop_event = asyncio.Event()
 
-    try:
-        redis_broker = RedisBroker(config)
-        await redis_broker.connect()
-        _broker = redis_broker
-        logger.info("redis_connected", url=config.REDIS_URL)
-    except Exception as e:
-        logger.warning(
-            "redis_unavailable_fallback_memory",
-            msg="Redis unreachable at localhost:6379. Operating in zero-dependency Standalone Mode with InMemoryBroker & SQLite.",
-            error=str(e),
-        )
+    is_serverless = bool(
+        os.environ.get("VERCEL")
+        or os.environ.get("AWS_LAMBDA_FUNCTION_NAME")
+        or os.environ.get("VERCEL_ENV")
+    )
+
+    if not is_serverless:
+        try:
+            redis_broker = RedisBroker(config)
+            await redis_broker.connect()
+            _broker = redis_broker
+            logger.info("redis_connected", url=config.REDIS_URL)
+        except Exception as e:
+            logger.warning(
+                "redis_unavailable_fallback_memory",
+                msg="Redis unreachable at localhost:6379. Operating in zero-dependency Standalone Mode with InMemoryBroker & SQLite.",
+                error=str(e),
+            )
+            from celerlite.broker.memory_broker import InMemoryBroker
+            from celerlite.worker.embedded import run_embedded_worker
+
+            _broker = InMemoryBroker(config)
+            await _broker.connect()
+            embedded_task = asyncio.create_task(
+                run_embedded_worker(_broker, stop_event=stop_event)
+            )
+
+        await init_db()
+        logger.info("api_started", host=config.API_HOST, port=config.API_PORT)
+    else:
         from celerlite.broker.memory_broker import InMemoryBroker
-        from celerlite.worker.embedded import run_embedded_worker
 
         _broker = InMemoryBroker(config)
         await _broker.connect()
-        embedded_task = asyncio.create_task(
-            run_embedded_worker(_broker, stop_event=stop_event)
-        )
+        await init_db()
 
-    await init_db()
-    logger.info("api_started", host=config.API_HOST, port=config.API_PORT)
     yield
     stop_event.set()
     if embedded_task:
@@ -76,15 +92,25 @@ async def lifespan(app: FastAPI):
     logger.info("api_stopped")
 
 
-def create_app() -> FastAPI:
+def create_app(serverless: bool = False) -> FastAPI:
     from celerlite.api.routes import dlq, metrics, tasks, workers
     from fastapi import Depends
+
+    is_serverless = (
+        serverless
+        or bool(
+            os.environ.get("VERCEL")
+            or os.environ.get("AWS_LAMBDA_FUNCTION_NAME")
+            or os.environ.get("VERCEL_ENV")
+        )
+    )
+    app_lifespan = None if is_serverless else lifespan
 
     app = FastAPI(
         title="CelerLite",
         description="Distributed Task Queue Engine — Real-Time Monitoring & Control",
         version="1.0.0",
-        lifespan=lifespan,
+        lifespan=app_lifespan,
         docs_url="/docs",
         redoc_url="/redoc",
     )
@@ -108,7 +134,6 @@ def create_app() -> FastAPI:
     app.include_router(ws_router)
 
     # Serve dashboard & static assets (robust cross-platform and Vercel serverless resolution)
-    import os
     from fastapi.responses import HTMLResponse, Response
 
     possible_dirs = [

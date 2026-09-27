@@ -12,6 +12,7 @@ from sqlalchemy.ext.asyncio import (
 
 from celerlite.config import config
 from celerlite.observability.logger import get_logger
+from sqlalchemy.pool import NullPool
 from celerlite.persistence.models import Base
 
 logger = get_logger(__name__)
@@ -19,7 +20,7 @@ logger = get_logger(__name__)
 
 def _create_engine(url: str):
     if "sqlite" in url:
-        return create_async_engine(url, echo=False)
+        return create_async_engine(url, poolclass=NullPool, echo=False)
     return create_async_engine(
         url,
         pool_size=config.DB_POOL_SIZE,
@@ -29,7 +30,11 @@ def _create_engine(url: str):
 
 
 # In Vercel serverless / read-only filesystem environments, default directly to SQLite in /tmp
-_is_vercel = bool(os.environ.get("VERCEL"))
+_is_vercel = bool(
+    os.environ.get("VERCEL")
+    or os.environ.get("AWS_LAMBDA_FUNCTION_NAME")
+    or os.environ.get("VERCEL_ENV")
+)
 _initial_db_url = (
     "sqlite+aiosqlite:////tmp/celerlite_dev.db"
     if _is_vercel
