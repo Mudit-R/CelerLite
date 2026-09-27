@@ -39,11 +39,12 @@ if __name__ == "__main__":
 ========================================================================
 """
     print(banner)
+    port = int(os.environ.get("PORT", config.API_PORT))
     uvicorn.run(
         "celerlite.api.app:create_app",
         factory=True,
         host=config.API_HOST,
-        port=config.API_PORT,
+        port=port,
         reload=False,
         log_level=config.LOG_LEVEL.lower(),
     )
