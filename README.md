@@ -9,25 +9,26 @@
 [![Tests](https://img.shields.io/badge/Tests-49%20Passed%20(100%25)-success?logo=pytest&logoColor=white)](tests/)
 [![License](https://img.shields.io/badge/License-MIT-purple.svg)](LICENSE)
 
-> 🚀 **Live Production Deployment**: [https://celerlite.onrender.com/](https://celerlite.onrender.com/)  
-> 📖 **Interactive Swagger Docs**: [https://celerlite.onrender.com/docs](https://celerlite.onrender.com/docs)  
-> ⚡ **CelerLite** is a production-grade, distributed asynchronous task queue and execution engine designed in Python 3.11+. Built from first principles to provide predictable low-latency, high-throughput task processing, strict multi-level priority scheduling, at-least-once execution guarantees, automatic dead-letter queue (DLQ) isolation, distributed rate limiting, and an enterprise Salesforce Lightning real-time monitoring console with live WebSocket telemetry.
+> **Live Deployment**: [https://celerlite.onrender.com/](https://celerlite.onrender.com/)  
+> **Swagger API Docs**: [https://celerlite.onrender.com/docs](https://celerlite.onrender.com/docs)  
+> **CelerLite** is a distributed asynchronous task queue and execution engine written in Python. Designed for low-latency, high-throughput task processing with multi-level priority scheduling, at-least-once execution guarantees, automatic dead-letter queue (DLQ) isolation, distributed rate limiting, and a real-time monitoring dashboard with live WebSocket telemetry.
 
 ---
 
 ## Table of Contents
 
-- [System Architecture](#-system-architecture)
-- [Core Engineering Highlights](#-core-engineering-highlights)
-- [Performance & Benchmarks](#-performance--benchmarks)
-- [Project Structure](#-project-structure)
-- [Quick Start](#-quick-start)
-  - [Option A: Full Stack with Docker Compose (Recommended)](#option-a-full-stack-with-docker-compose-recommended)
+- [System Architecture](#system-architecture)
+- [Core Engineering Highlights](#core-engineering-highlights)
+- [Performance & Benchmarks](#performance--benchmarks)
+- [Project Structure](#project-structure)
+- [Quick Start](#quick-start)
+  - [Live Cloud Deployment](#live-cloud-deployment)
+  - [Option A: Full Stack with Docker Compose](#option-a-full-stack-with-docker-compose-recommended)
   - [Option B: Local Standalone Development](#option-b-local-standalone-development)
-- [Python SDK Usage](#-python-sdk-usage)
-- [API & WebSocket Reference](#-api--websocket-reference)
-- [Testing & Quality Assurance](#-testing--quality-assurance)
-- [Resume Bullet Points](#-resume-bullet-points-for-software-engineers)
+- [Python SDK Usage](#python-sdk-usage)
+- [API & WebSocket Reference](#api--websocket-reference)
+- [Testing & Quality Assurance](#testing--quality-assurance)
+- [Resume Bullet Points](#resume-bullet-points-for-software-engineers)
 
 ---
 
@@ -187,10 +188,10 @@ CelerLite/
 
 ## Quick Start
 
-### 🌐 Live Cloud Demo
-Experience CelerLite live without any local setup:
-- **Real-Time Console**: [https://celerlite.onrender.com/](https://celerlite.onrender.com/)
-- **Interactive Swagger REST Docs**: [https://celerlite.onrender.com/docs](https://celerlite.onrender.com/docs)
+### Live Cloud Deployment
+Access the live deployment:
+- **Console UI**: [https://celerlite.onrender.com/](https://celerlite.onrender.com/)
+- **Swagger REST Docs**: [https://celerlite.onrender.com/docs](https://celerlite.onrender.com/docs)
 - **Prometheus Metrics**: [https://celerlite.onrender.com/api/v1/metrics](https://celerlite.onrender.com/api/v1/metrics)
 
 ---
