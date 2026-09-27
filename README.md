@@ -1,14 +1,17 @@
 # CelerLite — Distributed Task Queue & Execution Engine
 
+[![Live Demo](https://img.shields.io/badge/Live%20Demo-Render-46E3B7?logo=render&logoColor=white)](https://celerlite.onrender.com/)
 [![Python](https://img.shields.io/badge/Python-3.11%20%7C%203.12-blue?logo=python&logoColor=white)](https://python.org)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.115+-009688?logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com)
 [![Redis](https://img.shields.io/badge/Redis-7.0+-DC382D?logo=redis&logoColor=white)](https://redis.io)
 [![PostgreSQL](https://img.shields.io/badge/PostgreSQL-15+-336791?logo=postgresql&logoColor=white)](https://postgresql.org)
 [![Docker](https://img.shields.io/badge/Docker-Compose-2496ED?logo=docker&logoColor=white)](https://docker.com)
-[![Tests](https://img.shields.io/badge/Tests-46%20Passed%20(100%25)-success?logo=pytest&logoColor=white)](tests/)
+[![Tests](https://img.shields.io/badge/Tests-49%20Passed%20(100%25)-success?logo=pytest&logoColor=white)](tests/)
 [![License](https://img.shields.io/badge/License-MIT-purple.svg)](LICENSE)
 
-> **CelerLite** is a production-grade, distributed asynchronous task queue and execution engine designed in Python 3.11+. Built from first principles to provide predictable low-latency, high-throughput task processing, strict multi-level priority scheduling, at-least-once execution guarantees, automatic dead-letter queue (DLQ) isolation, distributed rate limiting, and a glassmorphic real-time monitoring dashboard with live WebSocket telemetry.
+> 🚀 **Live Production Deployment**: [https://celerlite.onrender.com/](https://celerlite.onrender.com/)  
+> 📖 **Interactive Swagger Docs**: [https://celerlite.onrender.com/docs](https://celerlite.onrender.com/docs)  
+> ⚡ **CelerLite** is a production-grade, distributed asynchronous task queue and execution engine designed in Python 3.11+. Built from first principles to provide predictable low-latency, high-throughput task processing, strict multi-level priority scheduling, at-least-once execution guarantees, automatic dead-letter queue (DLQ) isolation, distributed rate limiting, and an enterprise Salesforce Lightning real-time monitoring console with live WebSocket telemetry.
 
 ---
 
@@ -183,6 +186,14 @@ CelerLite/
 ---
 
 ## Quick Start
+
+### 🌐 Live Cloud Demo
+Experience CelerLite live without any local setup:
+- **Real-Time Console**: [https://celerlite.onrender.com/](https://celerlite.onrender.com/)
+- **Interactive Swagger REST Docs**: [https://celerlite.onrender.com/docs](https://celerlite.onrender.com/docs)
+- **Prometheus Metrics**: [https://celerlite.onrender.com/api/v1/metrics](https://celerlite.onrender.com/api/v1/metrics)
+
+---
 
 ### Option A: Full Stack with Docker Compose (Recommended)
 
