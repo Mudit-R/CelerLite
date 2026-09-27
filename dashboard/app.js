@@ -1,20 +1,20 @@
 /* ==========================================================================
-   CelerLite Console — Temporal Cloud Style Real-Time Controller
-   SPA View Switching, WebSocket Telemetry, Task Drawer & Modal
+   CelerLite Console — Salesforce Lightning Platform Controller
+   Real-time SLDS App, Tab Switching, Sales Path, Einstein AI, Drawer & Modal
    ========================================================================== */
 
 'use strict';
 
 const API = location.host ? '' : 'http://localhost:8000';
 let ws = null;
-let currentView = 'executions';
+let currentTab = 'executions';
 let currentStatusFilter = '';
 let currentQueueFilter = '';
 let searchQuery = '';
 let currentDrawerTask = null;
 let currentDrawerTaskId = null;
 
-// Telemetry & Cache
+// Telemetry & State Cache
 let executionsList = [];
 let throughputChart = null;
 let statusDonutChart = null;
@@ -30,6 +30,9 @@ document.addEventListener('DOMContentLoaded', () => {
   initCharts();
   loadAllData();
   setupKeyboardShortcuts();
+
+  // Auto-refresh stats every 4 seconds
+  setInterval(loadStats, 4000);
 });
 
 function setupKeyboardShortcuts() {
@@ -39,8 +42,10 @@ function setupKeyboardShortcuts() {
       closeTaskDrawer();
       closeStartTaskModal();
     }
-    // '/' focuses search bar
-    if (e.key === '/' && document.activeElement.tagName !== 'INPUT' && document.activeElement.tagName !== 'TEXTAREA') {
+    // Command+K or '/' focuses search
+    if ((e.key === '/' || (e.key === 'k' && (e.metaKey || e.ctrlKey))) && 
+        document.activeElement.tagName !== 'INPUT' && 
+        document.activeElement.tagName !== 'TEXTAREA') {
       e.preventDefault();
       const search = document.getElementById('globalSearchInput');
       if (search) search.focus();
@@ -62,7 +67,7 @@ function initWebSocket() {
 
     ws.onopen = () => {
       setConnectionStatus(true);
-      console.log('[WS] Connected to CelerLite event bus');
+      console.log('[SLDS WS] Connected to CelerLite event bus');
     };
 
     ws.onmessage = (event) => {
@@ -72,7 +77,7 @@ function initWebSocket() {
           handleIncomingEvent(payload);
         }
       } catch (err) {
-        console.warn('[WS] Parse error', err);
+        console.warn('[SLDS WS] Event parse error', err);
       }
     };
 
@@ -93,33 +98,17 @@ function initWebSocket() {
 function setConnectionStatus(connected) {
   const dot = document.getElementById('wsPulseDot');
   const text = document.getElementById('wsStatusText');
-  const badge = document.getElementById('liveStreamBadge');
 
   if (connected) {
-    if (dot) {
-      dot.style.backgroundColor = 'var(--emerald)';
-      dot.classList.add('status-pulse-dot');
-    }
+    if (dot) dot.style.backgroundColor = '#31e87d';
     if (text) text.textContent = 'Connected (Live)';
-    if (badge) {
-      badge.textContent = 'LIVE';
-      badge.style.color = 'var(--emerald)';
-    }
   } else {
-    if (dot) {
-      dot.style.backgroundColor = 'var(--rose)';
-      dot.classList.remove('status-pulse-dot');
-    }
+    if (dot) dot.style.backgroundColor = '#ea001e';
     if (text) text.textContent = 'Reconnecting...';
-    if (badge) {
-      badge.textContent = 'POLLING';
-      badge.style.color = 'var(--amber)';
-    }
   }
 }
 
 function handleIncomingEvent(event) {
-  // Update or insert task in local executions list
   const existingIdx = executionsList.findIndex(t => t.id === event.task_id);
   const nowIso = new Date().toISOString();
 
@@ -129,20 +118,24 @@ function handleIncomingEvent(event) {
       task.status = 'RUNNING';
       task.worker_id = event.worker_id;
       task.started_at = nowIso;
+      updateSalesPath('RUNNING');
     } else if (event.event === 'task_completed') {
       task.status = 'SUCCESS';
       task.completed_at = nowIso;
       task.duration_ms = event.duration_ms;
+      updateSalesPath('SUCCESS');
     } else if (event.event === 'task_failed') {
       task.status = 'FAILED';
       task.completed_at = nowIso;
       task.error_message = event.error;
+      updateSalesPath('FAILED');
     }
   } else if (event.task_id) {
+    const status = event.event === 'task_started' ? 'RUNNING' : (event.event === 'task_completed' ? 'SUCCESS' : 'PENDING');
     executionsList.unshift({
       id: event.task_id,
-      task_name: event.task_name || 'unknown',
-      status: event.event === 'task_started' ? 'RUNNING' : (event.event === 'task_completed' ? 'SUCCESS' : 'PENDING'),
+      task_name: event.task_name || 'celerlite.task',
+      status: status,
       queue: event.queue || 'default',
       priority: event.priority ?? 1,
       worker_id: event.worker_id || null,
@@ -151,17 +144,15 @@ function handleIncomingEvent(event) {
       completed_at: event.event === 'task_completed' ? nowIso : null,
       duration_ms: event.duration_ms || null,
     });
+    updateSalesPath(status);
   }
 
-  // Re-render table if on executions view
-  if (currentView === 'executions') {
+  if (currentTab === 'executions') {
     renderExecutionsTable();
   }
 
-  // Update stats counters
   loadStats();
 
-  // If the drawer is currently open for this task, refresh drawer
   if (currentDrawerTaskId === event.task_id) {
     openTaskDrawer(event.task_id, false);
   }
@@ -203,7 +194,6 @@ function renderExecutionsTable() {
   const emptyState = document.getElementById('executionsEmptyState');
   if (!tbody) return;
 
-  // Apply search filtering
   let filtered = executionsList;
   if (searchQuery) {
     const q = searchQuery.toLowerCase();
@@ -215,36 +205,99 @@ function renderExecutionsTable() {
     );
   }
 
+  // Update record count in header meta
+  const recordCountMeta = document.getElementById('recordCountMeta');
+  if (recordCountMeta) recordCountMeta.textContent = `${filtered.length} items`;
+
+  const paginationSummary = document.getElementById('paginationSummary');
+  if (paginationSummary) paginationSummary.textContent = `Showing 1-${filtered.length} of ${filtered.length} records`;
+
   if (filtered.length === 0) {
     tbody.innerHTML = '';
     if (emptyState) emptyState.style.display = 'flex';
-    document.getElementById('paginationSummary').textContent = 'Showing 0 of 0 executions';
     return;
   }
 
   if (emptyState) emptyState.style.display = 'none';
-  document.getElementById('paginationSummary').textContent = `Showing 1-${filtered.length} of ${filtered.length} executions`;
 
   tbody.innerHTML = filtered.map(t => {
-    const badgeClass = getBadgeClass(t.status);
+    const pill = getStatusPill(t.status);
     const priorityLabel = getPriorityLabel(t.priority);
     const duration = formatDuration(t.duration_ms, t.started_at, t.completed_at);
     const timeFormatted = formatTimeAgo(t.created_at || t.started_at);
 
     return `
-      <tr onclick="openTaskDrawer('${escapeHtml(t.id)}')">
-        <td><span class="badge ${badgeClass}">${escapeHtml(t.status)}</span></td>
+      <tr onclick="handleRowClick('${escapeHtml(t.id)}')">
+        <td onclick="event.stopPropagation()"><input type="checkbox" /></td>
+        <td><span class="slds-status-pill ${pill.css}">${pill.text}</span></td>
         <td class="task-name-cell">${escapeHtml(t.task_name)}</td>
-        <td><a href="javascript:void(0)" class="task-id-code" onclick="event.stopPropagation(); openTaskDrawer('${escapeHtml(t.id)}')">${escapeHtml(t.id.substring(0, 13))}…</a></td>
+        <td><a href="javascript:void(0)" class="task-id-code" onclick="event.stopPropagation(); handleRowClick('${escapeHtml(t.id)}')">${escapeHtml(t.id.substring(0, 13))}…</a></td>
         <td><span class="queue-tag">${escapeHtml(t.queue || 'default')}</span></td>
         <td><span class="priority-tag ${priorityLabel.css}">${priorityLabel.text}</span></td>
-        <td><span style="font-family: var(--font-mono); font-size: 11.5px; color: var(--text-muted);">${escapeHtml(t.worker_id || '—')}</span></td>
+        <td><span style="font-family: var(--font-mono); font-size: 11.5px; color: var(--slds-text-muted);">${escapeHtml(t.worker_id || '—')}</span></td>
         <td style="text-align: right;"><span class="duration-val">${duration}</span></td>
         <td style="text-align: right;"><span class="time-val">${timeFormatted}</span></td>
       </tr>
     `;
   }).join('');
 }
+
+function handleRowClick(taskId) {
+  openTaskDrawer(taskId);
+  const task = executionsList.find(t => t.id === taskId);
+  if (task) {
+    updateSalesPath(task.status);
+  }
+}
+
+// ==========================================================================
+// SALESFORCE SALES PATH (CHEVRON TRACKER)
+// ==========================================================================
+
+function updateSalesPath(status) {
+  const stepScheduled = document.getElementById('pathStepScheduled');
+  const stepQueued = document.getElementById('pathStepQueued');
+  const stepRunning = document.getElementById('pathStepRunning');
+  const stepSuccess = document.getElementById('pathStepSuccess');
+
+  if (!stepScheduled) return;
+
+  // Reset classes
+  [stepScheduled, stepQueued, stepRunning, stepSuccess].forEach(s => {
+    s.className = 'slds-path-step';
+  });
+
+  if (status === 'PENDING') {
+    stepScheduled.className = 'slds-path-step step-complete';
+    stepQueued.className = 'slds-path-step step-active';
+    stepRunning.className = 'slds-path-step step-upcoming';
+    stepSuccess.className = 'slds-path-step step-upcoming';
+  } else if (status === 'RUNNING') {
+    stepScheduled.className = 'slds-path-step step-complete';
+    stepQueued.className = 'slds-path-step step-complete';
+    stepRunning.className = 'slds-path-step step-active';
+    stepSuccess.className = 'slds-path-step step-upcoming';
+  } else if (status === 'SUCCESS') {
+    stepScheduled.className = 'slds-path-step step-complete';
+    stepQueued.className = 'slds-path-step step-complete';
+    stepRunning.className = 'slds-path-step step-complete';
+    stepSuccess.className = 'slds-path-step step-complete';
+  } else if (status === 'FAILED' || status === 'DEAD_LETTERED') {
+    stepScheduled.className = 'slds-path-step step-complete';
+    stepQueued.className = 'slds-path-step step-complete';
+    stepRunning.className = 'slds-path-step step-failed';
+    stepSuccess.className = 'slds-path-step step-failed';
+  } else {
+    stepScheduled.className = 'slds-path-step step-complete';
+    stepQueued.className = 'slds-path-step step-complete';
+    stepRunning.className = 'slds-path-step step-active';
+    stepSuccess.className = 'slds-path-step step-upcoming';
+  }
+}
+
+// ==========================================================================
+// STATS & EINSTEIN AI COPILOT
+// ==========================================================================
 
 async function loadStats() {
   try {
@@ -257,37 +310,42 @@ async function loadStats() {
       const dlq = stats.DEAD_LETTERED || 0;
       const pending = stats.PENDING || 0;
       const total = completed + running + failed + dlq + pending;
+      const tps = (stats.throughput_per_sec || 0.0);
 
-      document.getElementById('statTotalExecutions').textContent = total;
-      document.getElementById('statRunning').textContent = running;
-      document.getElementById('statCompleted').textContent = completed;
-      document.getElementById('statFailed').textContent = failed + dlq;
-      document.getElementById('statThroughput').textContent = (stats.throughput_per_sec || 0.0).toFixed(1);
+      // Dashboards & Reports Tab KPIs
+      const dbKpiTotal = document.getElementById('dbKpiTotal');
+      if (dbKpiTotal) dbKpiTotal.textContent = total;
 
-      // Pill counts
-      document.getElementById('pillCountAll').textContent = total;
-      document.getElementById('pillCountRunning').textContent = running;
-      document.getElementById('pillCountSuccess').textContent = completed;
-      document.getElementById('pillCountFailed').textContent = failed;
-      document.getElementById('pillCountDlq').textContent = dlq;
-      document.getElementById('navCountExecutions').textContent = total;
-      document.getElementById('navCountDLQ').textContent = dlq;
-
-      // Success rate
       const rate = total > 0 ? Math.round((completed / (completed + failed + dlq || 1)) * 100) : 100;
-      document.getElementById('statSuccessRate').textContent = `${rate}% success rate`;
+      const dbKpiRate = document.getElementById('dbKpiRate');
+      if (dbKpiRate) dbKpiRate.textContent = `${rate}%`;
 
-      // Update charts
-      updateDonutChart({ SUCCESS: completed, RUNNING: running, FAILED: failed, DEAD_LETTERED: dlq, PENDING: pending });
-      recordThroughputSample(stats.throughput_per_sec || 0);
+      const dbKpiTps = document.getElementById('dbKpiTps');
+      if (dbKpiTps) dbKpiTps.textContent = tps.toFixed(1);
 
-      // Latencies
-      if (stats.avg_latency_ms !== undefined) {
-        document.getElementById('telemetryLatAvg').textContent = `${stats.avg_latency_ms}ms`;
-        document.getElementById('telemetryLatP99').textContent = `${stats.p99_latency_ms || stats.avg_latency_ms}ms`;
-        document.getElementById('telemetryLatP50').textContent = `${Math.round(stats.avg_latency_ms * 0.7)}ms`;
-        document.getElementById('telemetryLatP95').textContent = `${Math.round(stats.avg_latency_ms * 1.3)}ms`;
+      const dbKpiLatency = document.getElementById('dbKpiLatency');
+      if (dbKpiLatency && stats.avg_latency_ms !== undefined) {
+        dbKpiLatency.textContent = `${stats.avg_latency_ms}ms`;
       }
+
+      // Einstein Task Intelligence Widget
+      const healthScore = Math.max(88, 100 - (failed * 3 + dlq * 5));
+      const copilotHealthScore = document.getElementById('copilotHealthScore');
+      if (copilotHealthScore) copilotHealthScore.textContent = `${healthScore.toFixed(1)}%`;
+
+      const copilotHealthBar = document.getElementById('copilotHealthBar');
+      if (copilotHealthBar) copilotHealthBar.style.width = `${healthScore}%`;
+
+      const copilotTps = document.getElementById('copilotTps');
+      if (copilotTps) copilotTps.textContent = `${tps.toFixed(1)} tps`;
+
+      // DLQ Tab Badge
+      const tabCountDLQ = document.getElementById('tabCountDLQ');
+      if (tabCountDLQ) tabCountDLQ.textContent = dlq;
+
+      // Update Charts
+      updateDonutChart({ SUCCESS: completed, RUNNING: running, FAILED: failed, DEAD_LETTERED: dlq });
+      recordThroughputSample(tps);
     }
   } catch (err) {
     console.warn('Stats poll error', err);
@@ -309,16 +367,16 @@ async function loadQueues() {
           <div class="queue-card">
             <div class="queue-card-top">
               <span class="queue-card-name">${escapeHtml(name)}</span>
-              <span class="badge badge-success">ACTIVE</span>
+              <span class="slds-status-pill status-success">ACTIVE</span>
             </div>
-            <div style="font-size: 11px; color: var(--text-muted);">Partition Sub-queues:</div>
+            <div style="font-size: 11.5px; color: var(--slds-text-muted);">Strict Priority Sub-queues:</div>
             <div class="queue-priority-breakdown">
               <div class="qp-item">
                 <span class="qp-label text-rose">CRITICAL</span>
                 <span class="qp-val">${prios.critical || 0}</span>
               </div>
               <div class="qp-item">
-                <span class="qp-label text-amber">HIGH</span>
+                <span class="qp-label" style="color: #b86200;">HIGH</span>
                 <span class="qp-val">${prios.high || 0}</span>
               </div>
               <div class="qp-item">
@@ -330,9 +388,9 @@ async function loadQueues() {
                 <span class="qp-val">${prios.low || 0}</span>
               </div>
             </div>
-            <div style="display: flex; justify-content: space-between; font-size: 11px; color: var(--text-muted); border-top: 1px solid var(--border-subtle); padding-top: 8px;">
-              <span>Total Backlog: <b style="color: var(--text-primary); font-family: var(--font-mono);">${total}</b></span>
-              <button class="btn-subtle" style="padding: 2px 7px; font-size: 10.5px;" onclick="filterByQueue('${escapeHtml(name)}')">View Tasks →</button>
+            <div style="display: flex; justify-content: space-between; align-items: center; font-size: 12px; color: var(--slds-text-muted); border-top: 1px solid var(--slds-border); padding-top: 10px;">
+              <span>Total Backlog: <b style="color: var(--slds-text-primary); font-family: var(--font-mono);">${total}</b></span>
+              <button class="slds-btn slds-btn-neutral slds-btn-xs" onclick="filterByQueue('${escapeHtml(name)}')">View Records →</button>
             </div>
           </div>
         `;
@@ -349,27 +407,24 @@ async function loadWorkers() {
     if (res.ok) {
       const workers = await res.json();
       const tbody = document.getElementById('workersTableBody');
-      const badge = document.getElementById('navCountWorkers');
-      if (badge) badge.textContent = `${workers.length} active`;
+      if (!tbody) return;
 
-      if (tbody) {
-        if (workers.length === 0) {
-          tbody.innerHTML = `<tr><td colspan="7" style="text-align: center; color: var(--text-muted); padding: 24px;">No workers registered. Start worker pool via scripts/run_worker.py or run.py</td></tr>`;
-          return;
-        }
-
-        tbody.innerHTML = workers.map(w => `
-          <tr>
-            <td><span class="badge ${w.status === 'ONLINE' ? 'badge-success' : 'badge-failed'}">${w.status}</span></td>
-            <td><code style="font-family: var(--font-mono); color: #93c5fd;">${escapeHtml(w.id)}</code></td>
-            <td>${escapeHtml(w.hostname || 'localhost')}</td>
-            <td><span style="font-family: var(--font-mono);">${w.pid || 1}</span></td>
-            <td style="text-align: right; font-family: var(--font-mono); font-weight: 600;">${w.tasks_processed || 0}</td>
-            <td style="text-align: right; font-family: var(--font-mono); color: ${w.tasks_failed > 0 ? 'var(--rose)' : 'inherit'};">${w.tasks_failed || 0}</td>
-            <td style="text-align: right; font-size: 11px; color: var(--text-muted);">${formatTimeAgo(w.last_heartbeat)}</td>
-          </tr>
-        `).join('');
+      if (workers.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="7" style="text-align: center; color: var(--slds-text-muted); padding: 32px;">No active worker processes detected in fleet.</td></tr>`;
+        return;
       }
+
+      tbody.innerHTML = workers.map(w => `
+        <tr>
+          <td><span class="slds-status-pill ${w.status === 'ONLINE' ? 'status-success' : 'status-failed'}">${w.status}</span></td>
+          <td><code style="font-family: var(--font-mono); color: #0176d3; font-weight: 600;">${escapeHtml(w.id)}</code></td>
+          <td>${escapeHtml(w.hostname || 'localhost')}</td>
+          <td><span style="font-family: var(--font-mono);">${w.pid || 1}</span></td>
+          <td style="text-align: right; font-family: var(--font-mono); font-weight: 600;">${w.tasks_processed || 0}</td>
+          <td style="text-align: right; font-family: var(--font-mono); color: ${w.tasks_failed > 0 ? 'var(--slds-error)' : 'inherit'};">${w.tasks_failed || 0}</td>
+          <td style="text-align: right; font-size: 11.5px; color: var(--slds-text-muted);">${formatTimeAgo(w.last_heartbeat)}</td>
+        </tr>
+      `).join('');
     }
   } catch (err) {
     console.warn('Worker poll error', err);
@@ -383,10 +438,9 @@ async function loadDLQ() {
       const entries = await res.json();
       const tbody = document.getElementById('dlqTableBody');
       const emptyState = document.getElementById('dlqEmptyState');
-      const navDlq = document.getElementById('navCountDLQ');
+      const tabBadge = document.getElementById('tabCountDLQ');
 
-      if (navDlq) navDlq.textContent = entries.length;
-
+      if (tabBadge) tabBadge.textContent = entries.length;
       if (!tbody) return;
 
       if (entries.length === 0) {
@@ -400,13 +454,13 @@ async function loadDLQ() {
       tbody.innerHTML = entries.map(e => `
         <tr>
           <td class="task-name-cell">${escapeHtml(e.task_name)}</td>
-          <td><span style="color: var(--rose); font-size: 11.5px;">${escapeHtml(e.error_message || 'Permanent failure')}</span></td>
+          <td><span style="color: var(--slds-error); font-size: 12px; font-weight: 500;">${escapeHtml(e.error_message || 'Permanent failure')}</span></td>
           <td style="text-align: center; font-family: var(--font-mono);">${e.retry_count}</td>
           <td><span class="queue-tag">${escapeHtml(e.original_queue)}</span></td>
           <td><span class="time-val">${formatTimeAgo(e.dead_lettered_at)}</span></td>
           <td style="text-align: right;">
-            <button class="btn-subtle" style="padding: 3px 8px; font-size: 11px;" onclick="replayDLQEntry('${escapeHtml(e.id)}')">↺ Replay</button>
-            <button class="btn-subtle" style="padding: 3px 6px; font-size: 11px; color: var(--rose);" onclick="deleteDLQEntry('${escapeHtml(e.id)}')">✕</button>
+            <button class="slds-btn slds-btn-neutral slds-btn-xs" onclick="replayDLQEntry('${escapeHtml(e.id)}')">↺ Replay</button>
+            <button class="slds-btn slds-btn-xs" style="color: var(--slds-error);" onclick="deleteDLQEntry('${escapeHtml(e.id)}')">✕</button>
           </td>
         </tr>
       `).join('');
@@ -422,13 +476,9 @@ async function loadMetrics() {
     if (res.ok) {
       const data = await res.json();
       if (data.redis) {
-        const mode = data.redis.mode || (data.redis.connected ? 'Redis Cluster' : 'Standalone');
-        document.getElementById('clusterModeLabel').textContent = mode;
-        document.getElementById('cfgBroker').textContent = mode;
-      }
-      if (data.uptime_seconds) {
-        const mins = Math.floor(data.uptime_seconds / 60);
-        document.getElementById('clusterUptimeText').textContent = `${mins}m uptime`;
+        const mode = data.redis.mode || (data.redis.connected ? 'Redis Distributed Broker' : 'InMemoryBroker (Standalone)');
+        const brokerEl = document.getElementById('cfgBroker');
+        if (brokerEl) brokerEl.textContent = mode;
       }
     }
   } catch (err) {
@@ -437,74 +487,138 @@ async function loadMetrics() {
 }
 
 // ==========================================================================
-// TEMPORAL SLIDE-OVER DRAWER (TASK DETAILS)
+// SALESFORCE NAVIGATION (TAB SWITCHING)
+// ==========================================================================
+
+function switchTab(tabName) {
+  currentTab = tabName;
+
+  // Update nav tabs
+  document.querySelectorAll('.slds-nav-tab').forEach(b => {
+    b.classList.toggle('active', b.dataset.tab === tabName);
+  });
+
+  // Update panels
+  document.querySelectorAll('.slds-tab-panel').forEach(p => p.classList.remove('active'));
+  const target = document.getElementById(`tab${tabName.charAt(0).toUpperCase() + tabName.slice(1)}`);
+  if (target) target.classList.add('active');
+
+  // Trigger relevant loader
+  if (tabName === 'executions') loadExecutions();
+  if (tabName === 'queues') loadQueues();
+  if (tabName === 'workers') loadWorkers();
+  if (tabName === 'dlq') loadDLQ();
+  if (tabName === 'dashboards') loadStats();
+  if (tabName === 'settings') loadMetrics();
+}
+
+function setStatusFilter(status) {
+  currentStatusFilter = status;
+  loadExecutions();
+}
+
+function setQueueFilter(queue) {
+  currentQueueFilter = queue;
+  loadExecutions();
+}
+
+function filterByQueue(queueName) {
+  switchTab('executions');
+  const sel = document.getElementById('queueFilterSelect');
+  if (sel) sel.value = queueName;
+  currentQueueFilter = queueName;
+  loadExecutions();
+}
+
+function handleSearch(val) {
+  searchQuery = val.trim();
+  renderExecutionsTable();
+}
+
+function manualRefresh() {
+  loadAllData();
+  showToast('Refreshed cluster records', 'info');
+}
+
+// ==========================================================================
+// SALESFORCE LIGHTNING SLIDE-OVER RECORD DRAWER
 // ==========================================================================
 
 async function openTaskDrawer(taskId, openAnimation = true) {
   currentDrawerTaskId = taskId;
   const drawer = document.getElementById('taskDrawer');
-  const overlay = document.getElementById('drawerOverlay');
+  const backdrop = document.getElementById('drawerBackdrop');
 
   if (openAnimation) {
-    drawer.classList.add('open');
-    overlay.classList.add('open');
+    if (drawer) drawer.classList.add('open');
+    if (backdrop) backdrop.classList.add('open');
   }
 
-  // Set ID and temporary loading text
-  document.getElementById('drawerTaskId').textContent = taskId;
-  document.getElementById('drawerTaskName').textContent = 'Loading execution details...';
+  const idEl = document.getElementById('drawerTaskId');
+  const nameEl = document.getElementById('drawerTaskName');
+  if (idEl) idEl.textContent = taskId;
+  if (nameEl) nameEl.textContent = 'Loading record details...';
 
   try {
     const res = await fetch(`${API}/api/v1/tasks/${taskId}`);
-    if (!res.ok) throw new Error('Task not found');
+    if (!res.ok) throw new Error('Task record not found');
     const task = await res.json();
     currentDrawerTask = task;
 
-    // Header info
-    document.getElementById('drawerTaskName').textContent = task.task_name;
+    if (nameEl) nameEl.textContent = task.task_name;
     const badge = document.getElementById('drawerStatusBadge');
-    badge.className = `badge ${getBadgeClass(task.status)}`;
-    badge.textContent = task.status;
+    if (badge) {
+      const pill = getStatusPill(task.status);
+      badge.className = `slds-drawer-badge ${pill.css}`;
+      badge.textContent = task.status;
+    }
 
-    // Timeline tab
     renderTimelineStepper(task);
 
-    // Input payload tab
+    // Input payload
     let parsedArgs = [];
     let parsedKwargs = {};
     try { parsedArgs = JSON.parse(task.args_json || '[]'); } catch (e) {}
     try { parsedKwargs = JSON.parse(task.kwargs_json || '{}'); } catch (e) {}
-    document.getElementById('drawerInputJson').textContent = JSON.stringify({ args: parsedArgs, kwargs: parsedKwargs }, null, 2);
+    const inEl = document.getElementById('drawerInputJson');
+    if (inEl) inEl.textContent = JSON.stringify({ args: parsedArgs, kwargs: parsedKwargs }, null, 2);
 
-    // Output payload tab
+    // Output payload
     let parsedResult = null;
     try { parsedResult = JSON.parse(task.result_json); } catch (e) { parsedResult = task.result_json; }
-    document.getElementById('drawerOutputJson').textContent = parsedResult !== null ? JSON.stringify(parsedResult, null, 2) : '(No result yet or task pending)';
+    const outEl = document.getElementById('drawerOutputJson');
+    if (outEl) outEl.textContent = parsedResult !== null ? JSON.stringify(parsedResult, null, 2) : '(No result yet or pending)';
 
     // Error tab
-    const errorTabBtn = document.getElementById('drawerTabError');
+    const errTab = document.getElementById('drawerTabError');
+    const errMsg = document.getElementById('drawerErrorMessage');
+    const errTb = document.getElementById('drawerErrorTraceback');
     if (task.error_message || task.error_traceback) {
-      errorTabBtn.style.display = 'inline-block';
-      document.getElementById('drawerErrorMessage').textContent = task.error_message || 'Task failed with exception';
-      document.getElementById('drawerErrorTraceback').textContent = task.error_traceback || 'No traceback captured';
+      if (errTab) errTab.style.display = 'inline-block';
+      if (errMsg) errMsg.textContent = task.error_message || 'Task failed';
+      if (errTb) errTb.textContent = task.error_traceback || 'No traceback captured';
     } else {
-      errorTabBtn.style.display = 'none';
-      document.getElementById('drawerErrorMessage').textContent = 'None';
-      document.getElementById('drawerErrorTraceback').textContent = 'None';
+      if (errTab) errTab.style.display = 'none';
     }
 
     // Metadata tab
-    document.getElementById('dmQueue').textContent = task.queue || 'default';
-    document.getElementById('dmPriority').textContent = `${getPriorityLabel(task.priority).text} (${task.priority})`;
-    document.getElementById('dmWorker').textContent = task.worker_id || 'Pending assignment';
-    document.getElementById('dmRetries').textContent = `${task.retry_count || 0} / ${task.max_retries || 3}`;
-    document.getElementById('dmTimeout').textContent = `${task.timeout || 300}s`;
-    document.getElementById('dmCreatedAt').textContent = task.created_at || '—';
-    document.getElementById('dmCompletedAt').textContent = task.completed_at || 'In-flight';
+    const qEl = document.getElementById('dmQueue');
+    if (qEl) qEl.textContent = task.queue || 'default';
+    const prioEl = document.getElementById('dmPriority');
+    if (prioEl) prioEl.textContent = `${getPriorityLabel(task.priority).text} (${task.priority})`;
+    const wEl = document.getElementById('dmWorker');
+    if (wEl) wEl.textContent = task.worker_id || 'Pending assignment';
+    const retEl = document.getElementById('dmRetries');
+    if (retEl) retEl.textContent = `${task.retry_count || 0} / ${task.max_retries || 3}`;
+    const toEl = document.getElementById('dmTimeout');
+    if (toEl) toEl.textContent = `${task.timeout || 300}s`;
+    const cAt = document.getElementById('dmCreatedAt');
+    if (cAt) cAt.textContent = task.created_at || '—';
+    const compAt = document.getElementById('dmCompletedAt');
+    if (compAt) compAt.textContent = task.completed_at || 'In-flight';
 
   } catch (err) {
-    document.getElementById('drawerTaskName').textContent = 'Task Details Unavailable';
-    console.error(err);
+    if (nameEl) nameEl.textContent = 'Record Details Unavailable';
   }
 }
 
@@ -517,29 +631,26 @@ function renderTimelineStepper(task) {
   const isRunning = task.status === 'RUNNING';
 
   container.innerHTML = `
-    <!-- Step 1: Enqueued -->
     <div class="timeline-step">
       <div class="t-icon done">✓</div>
       <div class="t-details">
-        <div class="t-title">Task Scheduled</div>
+        <div class="t-title">Task Scheduled & Partitioned</div>
         <div class="t-time">${task.created_at ? new Date(task.created_at).toLocaleTimeString() : '—'}</div>
-        <div class="t-desc">Enqueued to partition <code>${escapeHtml(task.queue || 'default')}</code> with priority ${task.priority}</div>
+        <div class="t-desc">Routed into queue partition <code>${escapeHtml(task.queue || 'default')}</code></div>
       </div>
     </div>
 
-    <!-- Step 2: Running -->
     <div class="timeline-step">
       <div class="t-icon ${isRunning ? 'active' : (isCompleted || isFailed ? 'done' : '')}">
         ${isRunning ? '▶' : (isCompleted || isFailed ? '✓' : '○')}
       </div>
       <div class="t-details">
-        <div class="t-title">Worker Assigned & Executing</div>
-        <div class="t-time">${task.started_at ? new Date(task.started_at).toLocaleTimeString() : (isRunning ? 'Executing now' : 'Pending')}</div>
+        <div class="t-title">Worker Process Acquired</div>
+        <div class="t-time">${task.started_at ? new Date(task.started_at).toLocaleTimeString() : (isRunning ? 'Executing' : 'Queued')}</div>
         <div class="t-desc">Claimed by worker <code>${escapeHtml(task.worker_id || 'worker-pool')}</code> (late ACK enabled)</div>
       </div>
     </div>
 
-    <!-- Step 3: Finished -->
     <div class="timeline-step">
       <div class="t-icon ${isCompleted ? 'done' : (isFailed ? 'error' : '')}">
         ${isCompleted ? '✓' : (isFailed ? '✕' : '○')}
@@ -547,7 +658,7 @@ function renderTimelineStepper(task) {
       <div class="t-details">
         <div class="t-title">${isCompleted ? 'Execution Succeeded' : (isFailed ? 'Execution Failed' : 'Pending Completion')}</div>
         <div class="t-time">${task.completed_at ? new Date(task.completed_at).toLocaleTimeString() : '—'}</div>
-        <div class="t-desc">${isCompleted ? 'Results acknowledged and stored in cache' : (isFailed ? (task.error_message || 'Task failed') : 'Waiting for worker process')}</div>
+        <div class="t-desc">${isCompleted ? 'Result committed and ACK sent' : (isFailed ? (task.error_message || 'Task failed') : 'Executing asynchronous workload')}</div>
       </div>
     </div>
   `;
@@ -555,28 +666,26 @@ function renderTimelineStepper(task) {
 
 function closeTaskDrawer() {
   const drawer = document.getElementById('taskDrawer');
-  const overlay = document.getElementById('drawerOverlay');
+  const backdrop = document.getElementById('drawerBackdrop');
   if (drawer) drawer.classList.remove('open');
-  if (overlay) overlay.classList.remove('open');
+  if (backdrop) backdrop.classList.remove('open');
   currentDrawerTaskId = null;
   currentDrawerTask = null;
 }
 
 function switchDrawerTab(tabName) {
-  document.querySelectorAll('.drawer-tab').forEach(b => b.classList.remove('active'));
-  document.querySelectorAll('.drawer-content').forEach(c => c.classList.remove('active'));
-
-  const btn = document.querySelector(`.drawer-tab[data-dtab="${tabName}"]`);
-  const content = document.getElementById(`dtabContent${tabName.charAt(0).toUpperCase() + tabName.slice(1)}`);
-
-  if (btn) btn.classList.add('active');
-  if (content) content.classList.add('active');
+  document.querySelectorAll('.drawer-tab-bar .d-tab').forEach(b => {
+    b.classList.toggle('active', b.dataset.dtab === tabName);
+  });
+  document.querySelectorAll('.drawer-body .drawer-tab-content').forEach(c => c.classList.remove('active'));
+  const target = document.getElementById(`dtab${tabName.charAt(0).toUpperCase() + tabName.slice(1)}`);
+  if (target) target.classList.add('active');
 }
 
 function copyCurrentTaskId() {
   if (currentDrawerTaskId) {
     navigator.clipboard.writeText(currentDrawerTaskId);
-    showToast('Task ID copied to clipboard', 'info');
+    showToast('Record ID copied to clipboard', 'info');
   }
 }
 
@@ -584,7 +693,7 @@ function copyJsonPayload(elementId) {
   const text = document.getElementById(elementId)?.textContent;
   if (text) {
     navigator.clipboard.writeText(text);
-    showToast('Payload copied to clipboard', 'info');
+    showToast('JSON payload copied', 'info');
   }
 }
 
@@ -604,7 +713,7 @@ async function replayCurrentDrawerTask() {
     });
     if (res.ok) {
       const data = await res.json();
-      showToast(`Task re-submitted with new ID: ${data.task_id.substring(0, 8)}…`, 'success');
+      showToast(`Task re-executed with Record ID: ${data.task_id.substring(0, 8)}…`, 'success');
       closeTaskDrawer();
       loadExecutions();
     }
@@ -619,7 +728,7 @@ async function revokeCurrentDrawerTask() {
     const res = await fetch(`${API}/api/v1/tasks/${currentDrawerTaskId}/revoke`, { method: 'POST' });
     if (res.ok) {
       showToast(`Task ${currentDrawerTaskId.substring(0, 8)}… revoked`, 'info');
-      openTaskDrawer(currentDrawerTaskId, false);
+      closeTaskDrawer();
       loadExecutions();
     }
   } catch (err) {
@@ -628,7 +737,7 @@ async function revokeCurrentDrawerTask() {
 }
 
 // ==========================================================================
-// START TASK MODAL
+// SALESFORCE LIGHTNING "NEW TASK" MODAL
 // ==========================================================================
 
 function openStartTaskModal() {
@@ -643,37 +752,45 @@ function closeStartTaskModal() {
 
 function applyTaskPreset(preset) {
   if (!preset) return;
-  document.getElementById('modalTaskName').value = preset;
+  const nameEl = document.getElementById('modalTaskName');
+  if (nameEl) nameEl.value = preset;
+
+  const argsEl = document.getElementById('modalTaskArgs');
+  const kwargsEl = document.getElementById('modalTaskKwargs');
+  const queueEl = document.getElementById('modalTaskQueue');
+  const retriesEl = document.getElementById('modalTaskRetries');
 
   if (preset === 'celerlite.demo.add') {
-    document.getElementById('modalTaskArgs').value = '[10, 20]';
-    document.getElementById('modalTaskKwargs').value = '{}';
-    document.getElementById('modalTaskQueue').value = 'default';
+    if (argsEl) argsEl.value = '[15, 25]';
+    if (kwargsEl) kwargsEl.value = '{}';
+    if (queueEl) queueEl.value = 'default';
   } else if (preset === 'celerlite.demo.multiply') {
-    document.getElementById('modalTaskArgs').value = '[7, 8]';
-    document.getElementById('modalTaskKwargs').value = '{}';
-    document.getElementById('modalTaskQueue').value = 'default';
+    if (argsEl) argsEl.value = '[7, 8]';
+    if (kwargsEl) kwargsEl.value = '{}';
+    if (queueEl) queueEl.value = 'default';
   } else if (preset === 'celerlite.demo.send_email') {
-    document.getElementById('modalTaskArgs').value = '["user@stripe.com", "Order Confirmation"]';
-    document.getElementById('modalTaskKwargs').value = '{}';
-    document.getElementById('modalTaskQueue').value = 'emails';
+    if (argsEl) argsEl.value = '["ceo@salesforce.com", "Quarterly Cloud Report"]';
+    if (kwargsEl) kwargsEl.value = '{}';
+    if (queueEl) queueEl.value = 'emails';
   } else if (preset === 'celerlite.demo.heavy_computation') {
-    document.getElementById('modalTaskArgs').value = '[10000]';
-    document.getElementById('modalTaskKwargs').value = '{}';
-    document.getElementById('modalTaskQueue').value = 'high_priority';
+    if (argsEl) argsEl.value = '[10000]';
+    if (kwargsEl) kwargsEl.value = '{}';
+    if (queueEl) queueEl.value = 'high_priority';
   } else if (preset === 'celerlite.demo.failing_task') {
-    document.getElementById('modalTaskArgs').value = '[]';
-    document.getElementById('modalTaskKwargs').value = '{"reason": "intentional"}';
-    document.getElementById('modalTaskQueue').value = 'default';
-    document.getElementById('modalTaskRetries').value = '2';
+    if (argsEl) argsEl.value = '[]';
+    if (kwargsEl) kwargsEl.value = '{"reason": "intentional"}';
+    if (queueEl) queueEl.value = 'default';
+    if (retriesEl) retriesEl.value = '2';
   }
 }
 
 async function handleStartTaskSubmit(event) {
   event.preventDefault();
   const btn = document.getElementById('btnSubmitModal');
-  btn.disabled = true;
-  btn.textContent = 'Submitting...';
+  if (btn) {
+    btn.disabled = true;
+    btn.textContent = 'Saving...';
+  }
 
   try {
     const taskName = document.getElementById('modalTaskName').value.trim();
@@ -700,114 +817,37 @@ async function handleStartTaskSubmit(event) {
 
     if (res.ok) {
       const data = await res.json();
-      showToast(`Task started: ${data.task_id.substring(0, 8)}…`, 'success');
+      showToast(`Task created: ${data.task_id.substring(0, 8)}…`, 'success');
       closeStartTaskModal();
       loadExecutions();
     } else {
-      showToast('Error submitting task', 'error');
+      showToast('Error creating task record', 'error');
     }
   } catch (err) {
     showToast(`Invalid JSON: ${err.message}`, 'error');
   } finally {
-    btn.disabled = false;
-    btn.textContent = 'Start Execution →';
+    if (btn) {
+      btn.disabled = false;
+      btn.textContent = 'Save & Run Task';
+    }
   }
 }
 
 async function triggerBatchDemo() {
-  showToast('Generating 10 test tasks...', 'info');
+  showToast('Submitting 10 demonstration tasks...', 'info');
   for (let i = 1; i <= 10; i++) {
     await fetch(`${API}/api/v1/tasks/submit`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         task_name: i % 2 === 0 ? 'celerlite.demo.add' : 'celerlite.demo.multiply',
-        args: [i * 2, i * 5],
+        args: [i * 3, i * 7],
         queue: i % 3 === 0 ? 'payments' : 'default',
         priority: i % 4,
       }),
     });
   }
   loadExecutions();
-}
-
-// ==========================================================================
-// VIEW SWITCHING (SPA NAVIGATION)
-// ==========================================================================
-
-function switchView(viewName) {
-  currentView = viewName;
-
-  // Update sidebar active buttons
-  document.querySelectorAll('.sidebar-nav .nav-item').forEach(b => {
-    b.classList.toggle('active', b.dataset.view === viewName);
-  });
-
-  // Update panels
-  document.querySelectorAll('.view-panel').forEach(p => p.classList.remove('active'));
-  const target = document.getElementById(`view${viewName.charAt(0).toUpperCase() + viewName.slice(1)}`);
-  if (target) target.classList.add('active');
-
-  // Breadcrumb title
-  const titles = {
-    executions: 'Executions',
-    queues: 'Task Queues',
-    workers: 'Worker Fleet',
-    dlq: 'Dead Letter Queue',
-    metrics: 'Telemetry',
-    settings: 'Configuration',
-  };
-  document.getElementById('currentViewTitle').textContent = titles[viewName] || 'Dashboard';
-
-  // Trigger relevant refresh
-  if (viewName === 'executions') loadExecutions();
-  if (viewName === 'queues') loadQueues();
-  if (viewName === 'workers') loadWorkers();
-  if (viewName === 'dlq') loadDLQ();
-  if (viewName === 'metrics') loadMetrics();
-}
-
-function setStatusFilter(status) {
-  currentStatusFilter = status;
-  document.querySelectorAll('#statusFilterPills .pill').forEach(p => {
-    p.classList.toggle('active', p.dataset.status === status);
-  });
-  loadExecutions();
-}
-
-function setQueueFilter(queue) {
-  currentQueueFilter = queue;
-  loadExecutions();
-}
-
-function filterByQueue(queueName) {
-  switchView('executions');
-  const sel = document.getElementById('queueFilterSelect');
-  if (sel) sel.value = queueName;
-  currentQueueFilter = queueName;
-  loadExecutions();
-}
-
-function handleSearch(val) {
-  searchQuery = val.trim();
-  renderExecutionsTable();
-}
-
-function manualRefresh() {
-  loadAllData();
-  showToast('Refreshed cluster state', 'info');
-}
-
-function handleRefreshChange(rate) {
-  if (autoRefreshTimer) {
-    clearInterval(autoRefreshTimer);
-    autoRefreshTimer = null;
-  }
-  if (rate === '5') {
-    autoRefreshTimer = setInterval(loadAllData, 5000);
-  } else if (rate === '15') {
-    autoRefreshTimer = setInterval(loadAllData, 15000);
-  }
 }
 
 // ==========================================================================
@@ -818,12 +858,12 @@ async function replayDLQEntry(entryId) {
   try {
     const res = await fetch(`${API}/api/v1/dlq/${entryId}/replay`, { method: 'POST' });
     if (res.ok) {
-      showToast('Task re-enqueued to original queue', 'success');
+      showToast('Task re-enqueued for execution', 'success');
       loadDLQ();
       loadExecutions();
     }
   } catch (err) {
-    showToast('Failed to replay DLQ entry', 'error');
+    showToast('Failed to replay task', 'error');
   }
 }
 
@@ -831,11 +871,11 @@ async function deleteDLQEntry(entryId) {
   try {
     const res = await fetch(`${API}/api/v1/dlq/${entryId}`, { method: 'DELETE' });
     if (res.ok) {
-      showToast('DLQ entry removed', 'info');
+      showToast('DLQ record purged', 'info');
       loadDLQ();
     }
   } catch (err) {
-    showToast('Failed to delete DLQ entry', 'error');
+    showToast('Failed to purge record', 'error');
   }
 }
 
@@ -854,11 +894,11 @@ async function replayAllDLQ() {
 }
 
 // ==========================================================================
-// CHARTS (CHART.JS ENTERPRISE DARK THEME)
+// CHARTS (CHART.JS SALESFORCE LIGHT THEME)
 // ==========================================================================
 
 function initCharts() {
-  // Throughput Line Chart
+  // Line Chart: Throughput Velocity
   const throughputCtx = document.getElementById('throughputChart')?.getContext('2d');
   if (throughputCtx) {
     const initialLabels = Array(20).fill('');
@@ -871,14 +911,14 @@ function initCharts() {
         datasets: [{
           label: 'Tasks / sec',
           data: initialData,
-          borderColor: '#4f46e5',
-          backgroundColor: 'rgba(79, 70, 229, 0.08)',
-          borderWidth: 2,
+          borderColor: '#0176d3',
+          backgroundColor: 'rgba(1, 118, 211, 0.08)',
+          borderWidth: 2.5,
           fill: true,
-          tension: 0.35,
+          tension: 0.3,
           pointRadius: 0,
-          pointHoverRadius: 4,
-          pointHoverBackgroundColor: '#4f46e5',
+          pointHoverRadius: 5,
+          pointHoverBackgroundColor: '#0176d3',
         }]
       },
       options: {
@@ -888,9 +928,7 @@ function initCharts() {
         plugins: {
           legend: { display: false },
           tooltip: {
-            backgroundColor: '#0e1320',
-            borderColor: '#222c42',
-            borderWidth: 1,
+            backgroundColor: '#032d60',
             titleFont: { family: 'Inter', size: 11 },
             bodyFont: { family: 'JetBrains Mono', size: 12 },
             padding: 8,
@@ -900,9 +938,9 @@ function initCharts() {
           x: { display: false },
           y: {
             beginAtZero: true,
-            grid: { color: 'rgba(255, 255, 255, 0.04)' },
+            grid: { color: '#f3f3f3' },
             ticks: {
-              color: '#64748b',
+              color: '#706e6b',
               font: { family: 'JetBrains Mono', size: 10 },
               maxTicksLimit: 5,
             }
@@ -912,7 +950,7 @@ function initCharts() {
     });
   }
 
-  // Status Donut Chart
+  // Donut Chart: Status Distribution
   const donutCtx = document.getElementById('statusDonut')?.getContext('2d');
   if (donutCtx) {
     statusDonutChart = new Chart(donutCtx, {
@@ -921,9 +959,9 @@ function initCharts() {
         labels: ['Completed', 'Running', 'Failed', 'DLQ'],
         datasets: [{
           data: [1, 0, 0, 0],
-          backgroundColor: ['#10b981', '#0ea5e9', '#f43f5e', '#a855f7'],
+          backgroundColor: ['#2e844a', '#0176d3', '#ea001e', '#7f22fe'],
           borderWidth: 2,
-          borderColor: '#0e1320',
+          borderColor: '#ffffff',
         }]
       },
       options: {
@@ -934,7 +972,7 @@ function initCharts() {
           legend: {
             position: 'bottom',
             labels: {
-              color: '#94a3b8',
+              color: '#444444',
               font: { family: 'Inter', size: 11 },
               boxWidth: 8,
               padding: 12,
@@ -953,12 +991,7 @@ function updateDonutChart(counts) {
   const failed = counts.FAILED || 0;
   const dlq = counts.DEAD_LETTERED || 0;
 
-  statusDonutChart.data.datasets[0].data = [
-    completed,
-    running,
-    failed,
-    dlq,
-  ];
+  statusDonutChart.data.datasets[0].data = [completed, running, failed, dlq];
   statusDonutChart.update();
 }
 
@@ -975,15 +1008,15 @@ function recordThroughputSample(tps) {
 // HELPERS
 // ==========================================================================
 
-function getBadgeClass(status) {
+function getStatusPill(status) {
   switch (status) {
-    case 'SUCCESS': return 'badge-success';
-    case 'RUNNING': return 'badge-running';
-    case 'FAILED': return 'badge-failed';
-    case 'RETRYING': return 'badge-retrying';
-    case 'DEAD_LETTERED': return 'badge-dlq';
-    case 'REVOKED': return 'badge-revoked';
-    default: return 'badge-retrying';
+    case 'SUCCESS': return { text: 'COMPLETED', css: 'status-success' };
+    case 'RUNNING': return { text: 'IN-PROGRESS', css: 'status-running' };
+    case 'FAILED': return { text: 'FAILED', css: 'status-failed' };
+    case 'DEAD_LETTERED': return { text: 'DEAD LETTER', css: 'status-dlq' };
+    case 'PENDING': return { text: 'PENDING', css: 'status-pending' };
+    case 'REVOKED': return { text: 'REVOKED', css: 'status-failed' };
+    default: return { text: status, css: 'status-pending' };
   }
 }
 
@@ -1003,25 +1036,42 @@ function formatDuration(ms, startedAt, completedAt) {
     return `${(ms / 1000).toFixed(2)}s`;
   }
   if (startedAt && completedAt) {
-    const diff = new Date(completedAt) - new Date(startedAt);
-    return diff < 1000 ? `${diff}ms` : `${(diff / 1000).toFixed(2)}s`;
+    const diff = new Date(completedAt).getTime() - new Date(startedAt).getTime();
+    if (diff < 1000) return `${diff}ms`;
+    return `${(diff / 1000).toFixed(2)}s`;
   }
   return '—';
 }
 
 function formatTimeAgo(isoString) {
   if (!isoString) return '—';
-  try {
-    const seconds = Math.floor((new Date() - new Date(isoString)) / 1000);
-    if (seconds < 5) return 'just now';
-    if (seconds < 60) return `${seconds}s ago`;
-    const mins = Math.floor(seconds / 60);
-    if (mins < 60) return `${mins}m ago`;
-    const hours = Math.floor(mins / 60);
-    return `${hours}h ago`;
-  } catch (e) {
-    return isoString;
-  }
+  const sec = Math.floor((Date.now() - new Date(isoString).getTime()) / 1000);
+  if (sec < 5) return 'just now';
+  if (sec < 60) return `${sec}s ago`;
+  const min = Math.floor(sec / 60);
+  if (min < 60) return `${min}m ago`;
+  const hr = Math.floor(min / 60);
+  if (hr < 24) return `${hr}h ago`;
+  return `${Math.floor(hr / 24)}d ago`;
+}
+
+function showToast(message, type = 'info') {
+  const container = document.getElementById('toastContainer');
+  if (!container) return;
+
+  const toast = document.createElement('div');
+  toast.className = `slds-toast toast-${type}`;
+  toast.innerHTML = `
+    <span>${type === 'success' ? '✓' : (type === 'error' ? '✕' : 'ℹ')}</span>
+    <span>${escapeHtml(message)}</span>
+  `;
+
+  container.appendChild(toast);
+  setTimeout(() => {
+    toast.style.opacity = '0';
+    toast.style.transition = 'opacity 0.3s ease';
+    setTimeout(() => toast.remove(), 300);
+  }, 3500);
 }
 
 function escapeHtml(str) {
@@ -1030,22 +1080,6 @@ function escapeHtml(str) {
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;');
-}
-
-function showToast(message, type = 'info') {
-  const container = document.getElementById('toastContainer');
-  if (!container) return;
-
-  const toast = document.createElement('div');
-  toast.className = `toast toast-${type}`;
-  toast.textContent = message;
-
-  container.appendChild(toast);
-  setTimeout(() => {
-    toast.style.opacity = '0';
-    toast.style.transform = 'translateY(8px)';
-    toast.style.transition = 'all 0.2s ease';
-    setTimeout(() => toast.remove(), 200);
-  }, 3200);
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
 }

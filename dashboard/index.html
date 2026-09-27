@@ -3,266 +3,256 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>CelerLite — Distributed Task & Workflow Execution Console</title>
-  <meta name="description" content="Production distributed task queue execution console and telemetry platform" />
-  
+  <title>CelerLite | Salesforce Lightning Platform Console</title>
+  <meta name="description" content="Salesforce Lightning Design System Task Queue & Orchestration Console" />
+
   <!-- Fonts: Inter & JetBrains Mono -->
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
-  
-  <!-- Chart.js for enterprise telemetry -->
+
+  <!-- Chart.js for Salesforce Lightning Dashboard Widgets -->
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
-  
-  <!-- Temporal Style System -->
+
+  <!-- Salesforce Lightning Design System (SLDS) Theme -->
   <link rel="stylesheet" href="/static/styles.css" />
 </head>
-<body class="temporal-theme">
+<body class="slds-theme">
 
-  <!-- Main Shell Layout -->
-  <div class="app-layout">
-    
-    <!-- LEFT SIDEBAR NAVIGATION (Temporal Cloud Style) -->
-    <aside class="sidebar">
-      
-      <!-- Brand & Namespace Selector -->
-      <div class="sidebar-header">
-        <div class="brand">
-          <div class="brand-logo">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-              <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon>
-            </svg>
-          </div>
-          <div class="brand-details">
-            <span class="brand-name">CelerLite</span>
-            <span class="brand-badge">ENGINE v1.0</span>
-          </div>
-        </div>
+  <!-- =========================================================================
+       SALESFORCE GLOBAL UTILITY HEADER (SLDS Global Header)
+       ========================================================================= -->
+  <header class="slds-global-header">
+    <div class="slds-global-header-left">
+      <!-- Salesforce App Launcher 3x3 Grid (Waffle Icon) -->
+      <button class="slds-app-launcher" title="App Launcher">
+        <span class="waffle-dot"></span><span class="waffle-dot"></span><span class="waffle-dot"></span>
+        <span class="waffle-dot"></span><span class="waffle-dot"></span><span class="waffle-dot"></span>
+        <span class="waffle-dot"></span><span class="waffle-dot"></span><span class="waffle-dot"></span>
+      </button>
 
-        <div class="namespace-selector" title="Current Namespace">
-          <div class="ns-indicator"></div>
-          <div class="ns-content">
-            <span class="ns-label">NAMESPACE</span>
-            <span class="ns-name">default</span>
-          </div>
-          <svg class="ns-arrow" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <polyline points="6 9 12 15 18 9"></polyline>
+      <!-- App Logo & Name -->
+      <div class="slds-app-identity">
+        <div class="slds-cloud-icon">
+          <svg width="22" height="16" viewBox="0 0 24 16" fill="currentColor">
+            <path d="M19.35 6.04C18.67 2.59 15.64 0 12 0 9.11 0 6.6 1.64 5.35 4.04 2.34 4.36 0 6.91 0 10c0 3.31 2.69 6 6 6h13c2.76 0 5-2.24 5-5 0-2.64-2.05-4.78-4.65-4.96z"></path>
           </svg>
+        </div>
+        <div class="slds-app-title">
+          <span class="slds-app-name">CelerLite Console</span>
+          <span class="slds-cloud-badge">Sales Cloud Edition</span>
         </div>
       </div>
+    </div>
 
-      <!-- Navigation Links -->
-      <nav class="sidebar-nav">
-        <div class="nav-section-title">PLATFORM</div>
-
-        <button class="nav-item active" data-view="executions" onclick="switchView('executions')">
-          <svg class="nav-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline>
-          </svg>
-          <span class="nav-label">Executions</span>
-          <span class="nav-count" id="navCountExecutions">0</span>
-        </button>
-
-        <button class="nav-item" data-view="queues" onclick="switchView('queues')">
-          <svg class="nav-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <rect x="2" y="7" width="20" height="14" rx="2" ry="2"></rect>
-            <path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"></path>
-          </svg>
-          <span class="nav-label">Task Queues</span>
-          <span class="nav-count" id="navCountQueues">4</span>
-        </button>
-
-        <button class="nav-item" data-view="workers" onclick="switchView('workers')">
-          <svg class="nav-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <rect x="4" y="4" width="16" height="16" rx="2"></rect>
-            <rect x="9" y="9" width="6" height="6"></rect>
-            <line x1="9" y1="1" x2="9" y2="4"></line>
-            <line x1="15" y1="1" x2="15" y2="4"></line>
-            <line x1="9" y1="20" x2="9" y2="23"></line>
-            <line x1="15" y1="20" x2="15" y2="23"></line>
-            <line x1="20" y1="9" x2="23" y2="9"></line>
-            <line x1="20" y1="14" x2="23" y2="14"></line>
-            <line x1="1" y1="9" x2="4" y2="9"></line>
-            <line x1="1" y1="14" x2="4" y2="14"></line>
-          </svg>
-          <span class="nav-label">Worker Fleet</span>
-          <span class="nav-badge-pill" id="navCountWorkers">1 active</span>
-        </button>
-
-        <button class="nav-item" data-view="dlq" onclick="switchView('dlq')">
-          <svg class="nav-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <circle cx="12" cy="12" r="10"></circle>
-            <line x1="15" y1="9" x2="9" y2="15"></line>
-            <line x1="9" y1="9" x2="15" y2="15"></line>
-          </svg>
-          <span class="nav-label">Dead Letter Queue</span>
-          <span class="nav-alert-pill" id="navCountDLQ">0</span>
-        </button>
-
-        <div class="nav-section-title" style="margin-top: 1.5rem;">OBSERVABILITY</div>
-
-        <button class="nav-item" data-view="metrics" onclick="switchView('metrics')">
-          <svg class="nav-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <line x1="18" y1="20" x2="18" y2="10"></line>
-            <line x1="12" y1="20" x2="12" y2="4"></line>
-            <line x1="6" y1="20" x2="6" y2="14"></line>
-          </svg>
-          <span class="nav-label">Cluster Telemetry</span>
-        </button>
-
-        <button class="nav-item" data-view="settings" onclick="switchView('settings')">
-          <svg class="nav-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <circle cx="12" cy="12" r="3"></circle>
-            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
-          </svg>
-          <span class="nav-label">Cluster Config</span>
-        </button>
-      </nav>
-
-      <!-- Sidebar Footer: Cluster Status -->
-      <div class="sidebar-footer">
-        <div class="cluster-status-card">
-          <div class="status-indicator-row">
-            <span class="status-pulse-dot" id="wsPulseDot"></span>
-            <span class="status-mode-label" id="clusterModeLabel">Standalone Engine</span>
-          </div>
-          <div class="status-meta-row">
-            <span id="wsStatusText">Connected (Live)</span>
-            <span class="status-latency" id="clusterUptimeText">0m uptime</span>
-          </div>
-        </div>
+    <!-- Global Search Bar (Salesforce Pill) -->
+    <div class="slds-global-search">
+      <div class="slds-search-box">
+        <svg class="search-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+          <circle cx="11" cy="11" r="8"></circle>
+          <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+        </svg>
+        <input type="text" id="globalSearchInput" placeholder="Search CelerLite Tasks, Queues, Workers, and DLQ..." oninput="handleSearch(this.value)" />
+        <span class="search-shortcut">⌘K</span>
       </div>
-    </aside>
+    </div>
 
-    <!-- MAIN APP CANVAS -->
-    <div class="main-canvas">
-      
-      <!-- TOP APPLICATION HEADER BAR -->
-      <header class="app-header">
-        <div class="header-left">
-          <div class="breadcrumbs">
-            <span class="bc-cluster">local-cluster</span>
-            <span class="bc-separator">/</span>
-            <span class="bc-ns">default</span>
-            <span class="bc-separator">/</span>
-            <span class="bc-active" id="currentViewTitle">Executions</span>
-          </div>
-        </div>
+    <!-- Global Actions Icons -->
+    <div class="slds-global-header-right">
+      <!-- Live Cluster Status -->
+      <div class="slds-cluster-indicator" id="clusterStatusPill">
+        <span class="slds-pulse-dot" id="wsPulseDot"></span>
+        <span class="slds-status-text" id="wsStatusText">Connected (Live)</span>
+      </div>
 
-        <div class="header-center">
-          <div class="search-box">
-            <svg class="search-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <circle cx="11" cy="11" r="8"></circle>
-              <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
-            </svg>
-            <input type="text" id="globalSearchInput" placeholder="Filter by Task ID, Name, or Worker... ( / )" oninput="handleSearch(this.value)" />
-            <kbd class="search-kbd">/</kbd>
-          </div>
-        </div>
+      <!-- Quick Actions -->
+      <button class="slds-icon-btn" title="Favorites">★</button>
+      <button class="slds-icon-btn" title="New Task (Quick Action)" onclick="openStartTaskModal()">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+          <line x1="12" y1="5" x2="12" y2="19"></line>
+          <line x1="5" y1="12" x2="19" y2="12"></line>
+        </svg>
+      </button>
+      <button class="slds-icon-btn" title="Notifications" id="btnNotifications">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path>
+          <path d="M13.73 21a2 2 0 0 1-3.46 0"></path>
+        </svg>
+        <span class="notif-badge" id="notifBadge">0</span>
+      </button>
+      <button class="slds-icon-btn" title="Setup & Cluster Config" onclick="switchTab('settings')">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="12" cy="12" r="3"></circle>
+          <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+        </svg>
+      </button>
 
-        <div class="header-right">
-          <div class="refresh-control">
-            <span class="refresh-indicator" id="liveStreamBadge">LIVE</span>
-            <select id="refreshRateSelect" onchange="handleRefreshChange(this.value)">
-              <option value="ws" selected>Live (WebSocket)</option>
-              <option value="5">Auto-refresh (5s)</option>
-              <option value="15">Auto-refresh (15s)</option>
-              <option value="manual">Manual only</option>
-            </select>
-            <button class="btn-icon" title="Refresh Now" onclick="manualRefresh()">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <polyline points="23 4 23 10 17 10"></polyline>
-                <polyline points="1 20 1 14 7 14"></polyline>
-                <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path>
-              </svg>
-            </button>
-          </div>
+      <!-- User Avatar Profile -->
+      <div class="slds-user-avatar" title="Mohit (Admin)">
+        <span>M</span>
+      </div>
+    </div>
+  </header>
 
-          <button class="btn-primary" onclick="openStartTaskModal()">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-              <line x1="12" y1="5" x2="12" y2="19"></line>
-              <line x1="5" y1="12" x2="19" y2="12"></line>
-            </svg>
-            <span>Start Task</span>
-          </button>
-        </div>
-      </header>
+  <!-- =========================================================================
+       SALESFORCE LIGHTNING NAVIGATION BAR (Object Tabs)
+       ========================================================================= -->
+  <nav class="slds-nav-bar">
+    <div class="slds-nav-tabs">
+      <button class="slds-nav-tab active" data-tab="executions" onclick="switchTab('executions')">
+        <span class="tab-icon">⚡</span>
+        <span class="tab-label">Tasks & Workflows</span>
+      </button>
 
-      <!-- CONTENT PANELS (TABBED VIEWS) -->
-      <main class="content-scroll">
-        
-        <!-- VIEW 1: EXECUTIONS (TASKS) -->
-        <section id="viewExecutions" class="view-panel active">
+      <button class="slds-nav-tab" data-tab="queues" onclick="switchTab('queues')">
+        <span class="tab-icon">📦</span>
+        <span class="tab-label">Task Queues</span>
+      </button>
+
+      <button class="slds-nav-tab" data-tab="workers" onclick="switchTab('workers')">
+        <span class="tab-icon">🤖</span>
+        <span class="tab-label">Worker Fleet</span>
+      </button>
+
+      <button class="slds-nav-tab" data-tab="dlq" onclick="switchTab('dlq')">
+        <span class="tab-icon">☠️</span>
+        <span class="tab-label">Dead Letter Queue</span>
+        <span class="tab-count-badge" id="tabCountDLQ">0</span>
+      </button>
+
+      <button class="slds-nav-tab" data-tab="dashboards" onclick="switchTab('dashboards')">
+        <span class="tab-icon">📊</span>
+        <span class="tab-label">Dashboards & Reports</span>
+      </button>
+
+      <button class="slds-nav-tab" data-tab="settings" onclick="switchTab('settings')">
+        <span class="tab-icon">⚙️</span>
+        <span class="tab-label">Cluster Setup</span>
+      </button>
+    </div>
+  </nav>
+
+  <!-- =========================================================================
+       MAIN APP CANVAS (Salesforce Canvas Background #f3f5f8)
+       ========================================================================= -->
+  <main class="slds-main-container">
+
+    <!-- TAB 1: TASKS & EXECUTIONS (Main Salesforce Record View) -->
+    <section id="tabExecutions" class="slds-tab-panel active">
+
+      <!-- Salesforce Lightning Record List View Header -->
+      <div class="slds-page-header">
+        <div class="slds-page-header-row">
           
-          <!-- Summary Metrics Cards (Temporal Metric Header) -->
-          <div class="stats-overview-grid">
-            <div class="stat-card">
-              <div class="stat-title">TOTAL EXECUTIONS</div>
-              <div class="stat-value" id="statTotalExecutions">0</div>
-              <div class="stat-meta">across all queues</div>
+          <div class="slds-media">
+            <!-- Orange Square Object Icon with Task Glyph -->
+            <div class="slds-object-icon object-task">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                <polyline points="20 6 9 17 4 12"></polyline>
+              </svg>
             </div>
-
-            <div class="stat-card">
-              <div class="stat-title">RUNNING</div>
-              <div class="stat-value text-blue" id="statRunning">0</div>
-              <div class="stat-meta">active in flight</div>
-            </div>
-
-            <div class="stat-card">
-              <div class="stat-title">COMPLETED</div>
-              <div class="stat-value text-emerald" id="statCompleted">0</div>
-              <div class="stat-meta" id="statSuccessRate">100% success rate</div>
-            </div>
-
-            <div class="stat-card">
-              <div class="stat-title">FAILED / DLQ</div>
-              <div class="stat-value text-rose" id="statFailed">0</div>
-              <div class="stat-meta" id="statDlqMeta">0 in dead letter queue</div>
-            </div>
-
-            <div class="stat-card">
-              <div class="stat-title">THROUGHPUT</div>
-              <div class="stat-value" id="statThroughput">0.0</div>
-              <div class="stat-meta">tasks / second</div>
-            </div>
-          </div>
-
-          <!-- Filter & Controls Toolbar -->
-          <div class="table-toolbar">
-            <div class="filter-pills" id="statusFilterPills">
-              <button class="pill active" data-status="" onclick="setStatusFilter('')">All <span class="pill-count" id="pillCountAll">0</span></button>
-              <button class="pill" data-status="RUNNING" onclick="setStatusFilter('RUNNING')">Running <span class="pill-count" id="pillCountRunning">0</span></button>
-              <button class="pill" data-status="SUCCESS" onclick="setStatusFilter('SUCCESS')">Completed <span class="pill-count" id="pillCountSuccess">0</span></button>
-              <button class="pill" data-status="FAILED" onclick="setStatusFilter('FAILED')">Failed <span class="pill-count" id="pillCountFailed">0</span></button>
-              <button class="pill" data-status="DEAD_LETTERED" onclick="setStatusFilter('DEAD_LETTERED')">Dead Lettered <span class="pill-count" id="pillCountDlq">0</span></button>
-            </div>
-
-            <div class="toolbar-actions">
-              <div class="select-wrapper">
-                <select id="queueFilterSelect" onchange="setQueueFilter(this.value)">
-                  <option value="">All Queues</option>
-                  <option value="default">default</option>
-                  <option value="emails">emails</option>
-                  <option value="payments">payments</option>
-                  <option value="high_priority">high_priority</option>
-                </select>
+            <div class="slds-media-body">
+              <div class="slds-breadcrumb-header">TASKS & WORKFLOWS</div>
+              <h1 class="slds-page-title">
+                <span id="currentListViewTitle">Recently Viewed</span>
+                <span class="slds-title-dropdown-icon">▼</span>
+              </h1>
+              <div class="slds-header-meta">
+                <span id="recordCountMeta">0 items</span> • <span id="lastUpdatedMeta">Updated just now</span>
               </div>
             </div>
           </div>
 
-          <!-- Main Executions Table -->
-          <div class="enterprise-table-container">
-            <table class="enterprise-table" id="executionsTable">
+          <!-- Lightning Action Buttons Bar -->
+          <div class="slds-header-actions">
+            <!-- Filter View Dropdown -->
+            <div class="slds-dropdown-wrapper">
+              <select id="statusFilterSelect" onchange="setStatusFilter(this.value)">
+                <option value="">All Statuses</option>
+                <option value="SUCCESS">Completed (Success)</option>
+                <option value="RUNNING">Running / In-Progress</option>
+                <option value="FAILED">Failed</option>
+                <option value="DEAD_LETTERED">Dead Lettered</option>
+                <option value="PENDING">Pending</option>
+              </select>
+            </div>
+
+            <!-- Queue Filter Dropdown -->
+            <div class="slds-dropdown-wrapper">
+              <select id="queueFilterSelect" onchange="setQueueFilter(this.value)">
+                <option value="">All Queues</option>
+                <option value="default">default</option>
+                <option value="emails">emails</option>
+                <option value="payments">payments</option>
+                <option value="high_priority">high_priority</option>
+              </select>
+            </div>
+
+            <button class="slds-btn slds-btn-neutral" onclick="manualRefresh()" title="Refresh List">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <polyline points="23 4 23 10 17 10"></polyline>
+                <polyline points="1 20 1 14 7 14"></polyline>
+                <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path>
+              </svg>
+              <span>Refresh</span>
+            </button>
+
+            <button class="slds-btn slds-btn-neutral" onclick="triggerBatchDemo()" title="Generate Test Workload">
+              <span>+ Generate Demo Tasks</span>
+            </button>
+
+            <!-- Signature Salesforce Primary Blue Button -->
+            <button class="slds-btn slds-btn-brand" onclick="openStartTaskModal()">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3">
+                <line x1="12" y1="5" x2="12" y2="19"></line>
+                <line x1="5" y1="12" x2="19" y2="12"></line>
+              </svg>
+              <span>New Task</span>
+            </button>
+          </div>
+
+        </div>
+      </div>
+
+      <!-- SALESFORCE SALES PATH (CHEVRON STAGE PROGRESS TRACKER) -->
+      <div class="slds-path-card" id="salesPathContainer">
+        <div class="slds-path-label">EXECUTION PATH LIFECYCLE:</div>
+        <div class="slds-path-track">
+          <div class="slds-path-step step-complete" id="pathStepScheduled">
+            <span class="path-check">✓</span>
+            <span class="path-title">SCHEDULED</span>
+          </div>
+          <div class="slds-path-step step-complete" id="pathStepQueued">
+            <span class="path-check">✓</span>
+            <span class="path-title">QUEUED</span>
+          </div>
+          <div class="slds-path-step step-active" id="pathStepRunning">
+            <span class="path-title">IN-PROGRESS</span>
+          </div>
+          <div class="slds-path-step step-upcoming" id="pathStepSuccess">
+            <span class="path-title">COMPLETED / CLOSED</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- TWO-COLUMN WORKSPACE: LIST & EINSTEIN AI COPILOT ASSISTANT -->
+      <div class="slds-split-workspace">
+        
+        <!-- Left / Center Main Data Table -->
+        <div class="slds-main-table-card">
+          <div class="slds-table-container">
+            <table class="slds-table slds-table-striped" id="executionsTable">
               <thead>
                 <tr>
-                  <th style="width: 110px;">STATUS</th>
+                  <th style="width: 32px;"><input type="checkbox" id="selectAllCheckbox" /></th>
+                  <th style="width: 120px;">STATUS</th>
                   <th>TASK NAME</th>
                   <th style="width: 140px;">TASK ID</th>
-                  <th style="width: 120px;">QUEUE</th>
-                  <th style="width: 100px;">PRIORITY</th>
-                  <th style="width: 150px;">WORKER</th>
-                  <th style="width: 90px; text-align: right;">DURATION</th>
-                  <th style="width: 150px; text-align: right;">TIME</th>
+                  <th style="width: 110px;">QUEUE</th>
+                  <th style="width: 95px;">PRIORITY</th>
+                  <th style="width: 150px;">WORKER NODE</th>
+                  <th style="width: 85px; text-align: right;">DURATION</th>
+                  <th style="width: 130px; text-align: right;">STARTED</th>
                 </tr>
               </thead>
               <tbody id="executionsTableBody">
@@ -270,362 +260,390 @@
               </tbody>
             </table>
 
-            <div id="executionsEmptyState" class="table-empty-state" style="display: none;">
-              <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-                <circle cx="12" cy="12" r="10"></circle>
-                <line x1="8" y1="12" x2="16" y2="12"></line>
-              </svg>
-              <div class="empty-title">No executions found</div>
-              <div class="empty-sub">Submit a task using "Start Task" or run demo scripts to see executions stream in real time.</div>
+            <div id="executionsEmptyState" class="slds-empty-state" style="display: none;">
+              <div class="slds-empty-icon">📂</div>
+              <div class="slds-empty-title">No task records found in this view</div>
+              <div class="slds-empty-sub">Click "New Task" or "+ Generate Demo Tasks" to start asynchronous executions.</div>
             </div>
           </div>
 
-          <!-- Table Pagination / Summary Footer -->
-          <div class="table-footer">
-            <div class="table-footer-left">
-              <span id="paginationSummary">Showing 0 of 0 executions</span>
-            </div>
-            <div class="table-footer-right">
-              <button class="btn-subtle" onclick="triggerBatchDemo()">+ Generate 10 Test Tasks</button>
-            </div>
+          <!-- Table Footer Pagination -->
+          <div class="slds-table-footer">
+            <span id="paginationSummary">Showing 0 items</span>
+            <span class="slds-engine-pill" id="footerEngineMode">CelerLite Distributed Engine</span>
           </div>
-        </section>
+        </div>
 
-        <!-- VIEW 2: TASK QUEUES -->
-        <section id="viewQueues" class="view-panel">
-          <div class="view-header">
-            <div>
-              <h2 class="view-heading">Task Queues</h2>
-              <p class="view-subheading">Active priority partition queues and consumer bindings</p>
+        <!-- Right Column: Salesforce Einstein AI / Agentforce Task Intelligence -->
+        <aside class="slds-copilot-card">
+          <div class="copilot-header">
+            <div class="copilot-badge">
+              <span class="copilot-sparkle">✨</span>
+              <span class="copilot-title">Einstein Task Intelligence</span>
             </div>
+            <span class="copilot-tag">AGENTFORCE AI</span>
           </div>
 
-          <div class="queue-cards-grid" id="queuesContainer">
-            <!-- Dynamically populated queue cards -->
-          </div>
-        </section>
-
-        <!-- VIEW 3: WORKER FLEET -->
-        <section id="viewWorkers" class="view-panel">
-          <div class="view-header">
-            <div>
-              <h2 class="view-heading">Worker Fleet</h2>
-              <p class="view-subheading">Cluster instances, heartbeats, and consumer poll rates</p>
-            </div>
-            <button class="btn-secondary" onclick="loadWorkers()">Refresh Fleet</button>
-          </div>
-
-          <div class="enterprise-table-container">
-            <table class="enterprise-table">
-              <thead>
-                <tr>
-                  <th style="width: 110px;">STATUS</th>
-                  <th>WORKER ID</th>
-                  <th>HOSTNAME</th>
-                  <th style="width: 80px;">PID</th>
-                  <th style="width: 120px; text-align: right;">PROCESSED</th>
-                  <th style="width: 100px; text-align: right;">FAILED</th>
-                  <th style="width: 160px; text-align: right;">LAST HEARTBEAT</th>
-                </tr>
-              </thead>
-              <tbody id="workersTableBody">
-                <!-- Dynamically populated -->
-              </tbody>
-            </table>
-          </div>
-        </section>
-
-        <!-- VIEW 4: DEAD LETTER QUEUE (DLQ) -->
-        <section id="viewDlq" class="view-panel">
-          <div class="view-header">
-            <div>
-              <h2 class="view-heading">Dead Letter Queue (DLQ)</h2>
-              <p class="view-subheading">Failed tasks that exhausted exponential retries and require operator triage</p>
-            </div>
-            <div class="header-actions">
-              <button class="btn-primary" onclick="replayAllDLQ()">↺ Replay All Tasks</button>
-            </div>
-          </div>
-
-          <div class="enterprise-table-container">
-            <table class="enterprise-table">
-              <thead>
-                <tr>
-                  <th>TASK NAME</th>
-                  <th>ERROR REASON</th>
-                  <th style="width: 80px; text-align: center;">RETRIES</th>
-                  <th style="width: 120px;">QUEUE</th>
-                  <th style="width: 160px;">DEAD-LETTERED AT</th>
-                  <th style="width: 120px; text-align: right;">ACTIONS</th>
-                </tr>
-              </thead>
-              <tbody id="dlqTableBody">
-                <!-- Dynamically populated -->
-              </tbody>
-            </table>
-
-            <div id="dlqEmptyState" class="table-empty-state" style="display: none;">
-              <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="#10b981" stroke-width="1.5">
-                <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
-                <polyline points="22 4 12 14.01 9 11.01"></polyline>
-              </svg>
-              <div class="empty-title">Dead Letter Queue is empty</div>
-              <div class="empty-sub">All distributed tasks are completing without unrecoverable errors.</div>
-            </div>
-          </div>
-        </section>
-
-        <!-- VIEW 5: OBSERVABILITY & METRICS -->
-        <section id="viewMetrics" class="view-panel">
-          <div class="view-header">
-            <div>
-              <h2 class="view-heading">Cluster Telemetry & Performance</h2>
-              <p class="view-subheading">Real-time throughput trends, latency percentiles, and resource utilization</p>
-            </div>
-          </div>
-
-          <div class="telemetry-grid">
-            <!-- Throughput Chart Card -->
-            <div class="telemetry-card chart-wide">
-              <div class="card-title-row">
-                <span class="card-title">EXECUTION THROUGHPUT (TASKS / SEC)</span>
-                <span class="card-tag">REAL-TIME</span>
+          <div class="copilot-body">
+            <!-- Health Score Widget -->
+            <div class="copilot-metric-box">
+              <div class="metric-row">
+                <span class="metric-label">CLUSTER HEALTH SCORE</span>
+                <span class="metric-score" id="copilotHealthScore">99.8%</span>
               </div>
-              <div class="chart-wrapper">
-                <canvas id="throughputChart"></canvas>
+              <div class="slds-progress-bar">
+                <div class="slds-progress-fill" id="copilotHealthBar" style="width: 99.8%;"></div>
               </div>
             </div>
 
-            <!-- Distribution Donut Card -->
-            <div class="telemetry-card">
-              <div class="card-title-row">
-                <span class="card-title">STATUS DISTRIBUTION</span>
+            <!-- Insights Feed -->
+            <div class="copilot-insight">
+              <div class="insight-icon">💡</div>
+              <div class="insight-content">
+                <div class="insight-title">Zero Worker Bottleneck Detected</div>
+                <div class="insight-desc">Throughput is optimal at <b id="copilotTps">0.0 tps</b> with late ACK guarantees active.</div>
               </div>
-              <div class="chart-donut-wrapper">
-                <canvas id="statusDonut"></canvas>
+            </div>
+
+            <div class="copilot-insight">
+              <div class="insight-icon">⚡</div>
+              <div class="insight-content">
+                <div class="insight-title">Automatic DLQ Isolation</div>
+                <div class="insight-desc">All unrecoverable task exceptions are automatically quarantined for zero data loss.</div>
               </div>
+            </div>
+
+            <!-- Quick Recommended Actions -->
+            <div class="copilot-actions">
+              <div class="copilot-actions-title">RECOMMENDED ACTIONS</div>
+              <button class="slds-btn slds-btn-neutral slds-btn-block" onclick="triggerBatchDemo()">+ Generate 10 Workload Tasks</button>
+              <button class="slds-btn slds-btn-neutral slds-btn-block" onclick="switchTab('dashboards')">View Executive Performance Report →</button>
             </div>
           </div>
+        </aside>
 
-          <div class="latency-metrics-row">
-            <div class="latency-card">
-              <div class="lat-label">P50 LATENCY</div>
-              <div class="lat-val" id="telemetryLatP50">—</div>
-              <div class="lat-sub">50th percentile execution</div>
-            </div>
+      </div>
 
-            <div class="latency-card">
-              <div class="lat-label">P95 LATENCY</div>
-              <div class="lat-val" id="telemetryLatP95">—</div>
-              <div class="lat-sub">95th percentile execution</div>
-            </div>
+    </section>
 
-            <div class="latency-card">
-              <div class="lat-label">P99 LATENCY</div>
-              <div class="lat-val" id="telemetryLatP99">—</div>
-              <div class="lat-sub">99th percentile peak</div>
-            </div>
-
-            <div class="latency-card">
-              <div class="lat-label">AVERAGE LATENCY</div>
-              <div class="lat-val" id="telemetryLatAvg">—</div>
-              <div class="lat-sub">mean execution duration</div>
-            </div>
+    <!-- TAB 2: TASK QUEUES -->
+    <section id="tabQueues" class="slds-tab-panel">
+      <div class="slds-page-header">
+        <div class="slds-media">
+          <div class="slds-object-icon object-queue">📦</div>
+          <div class="slds-media-body">
+            <div class="slds-breadcrumb-header">INFRASTRUCTURE</div>
+            <h1 class="slds-page-title">Task Queues & Priority Partitions</h1>
+            <div class="slds-header-meta">Multi-queue strict priority scheduling (CRITICAL &gt; HIGH &gt; NORMAL &gt; LOW)</div>
           </div>
-        </section>
+        </div>
+      </div>
 
-        <!-- VIEW 6: CLUSTER CONFIGURATION -->
-        <section id="viewSettings" class="view-panel">
-          <div class="view-header">
-            <div>
-              <h2 class="view-heading">Cluster Configuration & Topology</h2>
-              <p class="view-subheading">Runtime settings, persistence backend, and driver parameters</p>
-            </div>
+      <div class="slds-queue-grid" id="queuesContainer">
+        <!-- Dynamically populated queue cards -->
+      </div>
+    </section>
+
+    <!-- TAB 3: WORKER FLEET -->
+    <section id="tabWorkers" class="slds-tab-panel">
+      <div class="slds-page-header">
+        <div class="slds-media">
+          <div class="slds-object-icon object-worker">🤖</div>
+          <div class="slds-media-body">
+            <div class="slds-breadcrumb-header">NODES</div>
+            <h1 class="slds-page-title">Worker Fleet & Heartbeat Telemetry</h1>
+            <div class="slds-header-meta">Multi-process worker pool with liveness supervision</div>
           </div>
+        </div>
+        <div class="slds-header-actions">
+          <button class="slds-btn slds-btn-neutral" onclick="loadWorkers()">Refresh Fleet</button>
+        </div>
+      </div>
 
-          <div class="config-grid">
-            <div class="config-card">
-              <h3 class="config-card-title">Execution Engine</h3>
-              <div class="config-item">
-                <span class="config-key">Broker Implementation</span>
-                <span class="config-val" id="cfgBroker">InMemoryBroker (Standalone) / Redis</span>
-              </div>
-              <div class="config-item">
-                <span class="config-key">Persistence Storage</span>
-                <span class="config-val" id="cfgDb">SQLAlchemy 2.0 (SQLite / Postgres)</span>
-              </div>
-              <div class="config-item">
-                <span class="config-key">Serialization Format</span>
-                <span class="config-val">MessagePack (msgpack) with JSON fallback</span>
-              </div>
-              <div class="config-item">
-                <span class="config-key">Acknowledgment Policy</span>
-                <span class="config-val">TASK_ACK_LATE (At-Least-Once Delivery)</span>
-              </div>
-            </div>
+      <div class="slds-main-table-card">
+        <div class="slds-table-container">
+          <table class="slds-table slds-table-striped">
+            <thead>
+              <tr>
+                <th style="width: 120px;">STATUS</th>
+                <th>WORKER ID</th>
+                <th>HOSTNAME</th>
+                <th style="width: 90px;">PID</th>
+                <th style="width: 120px; text-align: right;">TASKS PROCESSED</th>
+                <th style="width: 100px; text-align: right;">FAILED</th>
+                <th style="width: 160px; text-align: right;">LAST HEARTBEAT</th>
+              </tr>
+            </thead>
+            <tbody id="workersTableBody">
+              <!-- Dynamically populated -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
 
-            <div class="config-card">
-              <h3 class="config-card-title">Reliability & Resiliency</h3>
-              <div class="config-item">
-                <span class="config-key">Default Max Retries</span>
-                <span class="config-val">3 attempts</span>
-              </div>
-              <div class="config-item">
-                <span class="config-key">Retry Backoff Policy</span>
-                <span class="config-val">Exponential backoff + full jitter</span>
-              </div>
-              <div class="config-item">
-                <span class="config-key">Heartbeat Interval</span>
-                <span class="config-val">10 seconds</span>
-              </div>
-              <div class="config-item">
-                <span class="config-key">Heartbeat Timeout</span>
-                <span class="config-val">30 seconds (Automatic orphan task reap)</span>
-              </div>
-            </div>
+    <!-- TAB 4: DEAD LETTER QUEUE (DLQ) -->
+    <section id="tabDlq" class="slds-tab-panel">
+      <div class="slds-page-header">
+        <div class="slds-media">
+          <div class="slds-object-icon object-dlq">☠️</div>
+          <div class="slds-media-body">
+            <div class="slds-breadcrumb-header">INCIDENT MANAGEMENT</div>
+            <h1 class="slds-page-title">Dead Letter Queue (DLQ)</h1>
+            <div class="slds-header-meta">Permanently failed tasks isolated for triage and bulk replay</div>
           </div>
-        </section>
+        </div>
+        <div class="slds-header-actions">
+          <button class="slds-btn slds-btn-brand" onclick="replayAllDLQ()">↺ Replay All DLQ Tasks</button>
+        </div>
+      </div>
 
-      </main>
+      <div class="slds-main-table-card">
+        <div class="slds-table-container">
+          <table class="slds-table slds-table-striped">
+            <thead>
+              <tr>
+                <th>TASK NAME</th>
+                <th>ERROR REASON</th>
+                <th style="width: 90px; text-align: center;">RETRIES</th>
+                <th style="width: 120px;">QUEUE</th>
+                <th style="width: 160px;">DEAD-LETTERED AT</th>
+                <th style="width: 130px; text-align: right;">ACTIONS</th>
+              </tr>
+            </thead>
+            <tbody id="dlqTableBody">
+              <!-- Dynamically populated -->
+            </tbody>
+          </table>
+
+          <div id="dlqEmptyState" class="slds-empty-state" style="display: none;">
+            <div class="slds-empty-icon" style="color: #2e844a;">✓</div>
+            <div class="slds-empty-title">Dead Letter Queue is clear</div>
+            <div class="slds-empty-sub">All distributed tasks are completing without unrecoverable errors.</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- TAB 5: DASHBOARDS & REPORTS (SALESFORCE EXECUTIVE DASHBOARD) -->
+    <section id="tabDashboards" class="slds-tab-panel">
+      <div class="slds-page-header">
+        <div class="slds-media">
+          <div class="slds-object-icon object-dashboard">📊</div>
+          <div class="slds-media-body">
+            <div class="slds-breadcrumb-header">EXECUTIVE REPORT</div>
+            <h1 class="slds-page-title">Executive Operations & Velocity Dashboard</h1>
+            <div class="slds-header-meta">Real-time throughput trends, SLA compliance, and execution metrics</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Salesforce Dashboard 4-KPI Row -->
+      <div class="slds-kpi-row">
+        <div class="slds-kpi-card">
+          <div class="kpi-header">TOTAL EXECUTIONS</div>
+          <div class="kpi-val" id="dbKpiTotal">0</div>
+          <div class="kpi-meta text-emerald">↑ 100% of pipeline</div>
+        </div>
+
+        <div class="slds-kpi-card">
+          <div class="kpi-header">SUCCESSFUL RATE</div>
+          <div class="kpi-val text-emerald" id="dbKpiRate">100%</div>
+          <div class="kpi-meta">High reliability threshold</div>
+        </div>
+
+        <div class="slds-kpi-card">
+          <div class="kpi-header">CLUSTER THROUGHPUT</div>
+          <div class="kpi-val text-blue" id="dbKpiTps">0.0</div>
+          <div class="kpi-meta">tasks / second sustained</div>
+        </div>
+
+        <div class="slds-kpi-card">
+          <div class="kpi-header">P99 LATENCY</div>
+          <div class="kpi-val" id="dbKpiLatency">—</div>
+          <div class="kpi-meta">sub-second SLA execution</div>
+        </div>
+      </div>
+
+      <!-- Charts Grid -->
+      <div class="slds-dashboard-grid">
+        <div class="slds-chart-card chart-span-2">
+          <div class="chart-header">
+            <span class="chart-title">EXECUTION THROUGHPUT VELOCITY (TASKS/SEC)</span>
+            <span class="chart-badge">REAL-TIME</span>
+          </div>
+          <div class="chart-wrapper">
+            <canvas id="throughputChart"></canvas>
+          </div>
+        </div>
+
+        <div class="slds-chart-card">
+          <div class="chart-header">
+            <span class="chart-title">EXECUTION STATUS DISTRIBUTION</span>
+          </div>
+          <div class="chart-wrapper">
+            <canvas id="statusDonut"></canvas>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- TAB 6: CLUSTER SETUP & CONFIG -->
+    <section id="tabSettings" class="slds-tab-panel">
+      <div class="slds-page-header">
+        <div class="slds-media">
+          <div class="slds-object-icon object-setup">⚙️</div>
+          <div class="slds-media-body">
+            <div class="slds-breadcrumb-header">CONFIGURATION</div>
+            <h1 class="slds-page-title">Salesforce Lightning Cluster Settings</h1>
+            <div class="slds-header-meta">Environment parameters, driver topology, and persistence layers</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="slds-settings-grid">
+        <div class="slds-settings-card">
+          <h3 class="settings-title">Engine Architecture</h3>
+          <div class="settings-row"><span class="s-key">Broker Implementation</span><span class="s-val" id="cfgBroker">InMemoryBroker (Standalone) / Redis</span></div>
+          <div class="settings-row"><span class="s-key">Persistence Backend</span><span class="s-val" id="cfgDb">SQLAlchemy 2.0 (PostgreSQL / SQLite)</span></div>
+          <div class="settings-row"><span class="s-key">Serialization Engine</span><span class="s-val">MessagePack (msgpack) binary + JSON</span></div>
+          <div class="settings-row"><span class="s-key">Acknowledgment Semantic</span><span class="s-val">TASK_ACK_LATE (Zero Data Loss)</span></div>
+        </div>
+
+        <div class="slds-settings-card">
+          <h3 class="settings-title">Reliability & Governance</h3>
+          <div class="settings-row"><span class="s-key">Default Retry Threshold</span><span class="s-val">3 attempts</span></div>
+          <div class="settings-row"><span class="s-key">Backoff Algorithm</span><span class="s-val">Exponential backoff + full jitter</span></div>
+          <div class="settings-row"><span class="s-key">Worker Heartbeat Frequency</span><span class="s-val">10 seconds</span></div>
+          <div class="settings-row"><span class="s-key">Orphan Task Timeout</span><span class="s-val">30 seconds (Auto-recovery)</span></div>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- =========================================================================
+       SALESFORCE LIGHTNING SLIDE-OVER RECORD DRAWER (Task Details)
+       ========================================================================= -->
+  <div class="slds-drawer-backdrop" id="drawerBackdrop" onclick="closeTaskDrawer()"></div>
+  <aside class="slds-drawer" id="taskDrawer">
+    <div class="drawer-header">
+      <div class="drawer-header-row">
+        <div class="drawer-header-title-box">
+          <span class="slds-drawer-badge" id="drawerStatusBadge">SUCCESS</span>
+          <h2 class="drawer-record-name" id="drawerTaskName">celerlite.demo.add</h2>
+        </div>
+        <button class="slds-close-btn" onclick="closeTaskDrawer()" title="Close">✕</button>
+      </div>
+
+      <div class="drawer-record-id-bar">
+        <span class="id-label">RECORD ID:</span>
+        <code class="id-value" id="drawerTaskId">e6a2b0fd-4f11-48e0...</code>
+        <button class="slds-copy-icon-btn" onclick="copyCurrentTaskId()" title="Copy Task ID">📋</button>
+      </div>
+
+      <!-- Lightning Record Tabs -->
+      <div class="drawer-tab-bar">
+        <button class="d-tab active" data-dtab="timeline" onclick="switchDrawerTab('timeline')">Activity Timeline</button>
+        <button class="d-tab" data-dtab="input" onclick="switchDrawerTab('input')">Input Arguments</button>
+        <button class="d-tab" data-dtab="output" onclick="switchDrawerTab('output')">Return Result</button>
+        <button class="d-tab" data-dtab="error" id="drawerTabError" onclick="switchDrawerTab('error')">Error Details</button>
+        <button class="d-tab" data-dtab="metadata" onclick="switchDrawerTab('metadata')">System Details</button>
+      </div>
     </div>
 
-    <!-- TEMPORAL SIGNATURE: TASK DETAILS SLIDE-OVER DRAWER -->
-    <div class="drawer-overlay" id="drawerOverlay" onclick="closeTaskDrawer()"></div>
-    <aside class="task-drawer" id="taskDrawer">
-      <div class="drawer-header">
-        <div class="drawer-header-top">
-          <span class="badge" id="drawerStatusBadge">COMPLETED</span>
-          <button class="btn-close" onclick="closeTaskDrawer()" title="Close (Esc)">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <line x1="18" y1="6" x2="6" y2="18"></line>
-              <line x1="6" y1="6" x2="18" y2="18"></line>
-            </svg>
-          </button>
-        </div>
-
-        <h2 class="drawer-task-name" id="drawerTaskName">celerlite.demo.add</h2>
-        
-        <div class="drawer-id-row">
-          <span class="drawer-id-label">TASK ID:</span>
-          <code class="drawer-id-code" id="drawerTaskId">e6a2b0fd-4f11-48e0...</code>
-          <button class="btn-copy-id" onclick="copyCurrentTaskId()" title="Copy ID">
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
-              <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
-            </svg>
-          </button>
-        </div>
-
-        <!-- Drawer Navigation Tabs -->
-        <div class="drawer-tabs">
-          <button class="drawer-tab active" data-dtab="timeline" onclick="switchDrawerTab('timeline')">Timeline</button>
-          <button class="drawer-tab" data-dtab="input" onclick="switchDrawerTab('input')">Input Payload</button>
-          <button class="drawer-tab" data-dtab="output" onclick="switchDrawerTab('output')">Result</button>
-          <button class="drawer-tab" data-dtab="error" id="drawerTabError" onclick="switchDrawerTab('error')">Error</button>
-          <button class="drawer-tab" data-dtab="metadata" onclick="switchDrawerTab('metadata')">Metadata</button>
+    <div class="drawer-body">
+      <!-- Activity Timeline -->
+      <div class="drawer-tab-content active" id="dtabTimeline">
+        <div class="slds-timeline" id="drawerTimeline">
+          <!-- Populated dynamically -->
         </div>
       </div>
 
-      <div class="drawer-body">
-        
-        <!-- Drawer Tab: Timeline -->
-        <div class="drawer-content active" id="dtabContentTimeline">
-          <div class="timeline-stepper" id="drawerTimeline">
-            <!-- Dynamically populated execution steps -->
+      <!-- Input Arguments -->
+      <div class="drawer-tab-content" id="dtabInput">
+        <div class="slds-code-box">
+          <div class="code-box-header">
+            <span>JSON ARGUMENTS & KWARGS</span>
+            <button class="slds-btn-xs" onclick="copyJsonPayload('drawerInputJson')">Copy JSON</button>
           </div>
+          <pre class="slds-json-code"><code id="drawerInputJson">[]</code></pre>
         </div>
-
-        <!-- Drawer Tab: Input -->
-        <div class="drawer-content" id="dtabContentInput">
-          <div class="code-container">
-            <div class="code-header">
-              <span>POSITIONAL ARGS & KWARGS</span>
-              <button class="btn-copy-code" onclick="copyJsonPayload('drawerInputJson')">Copy JSON</button>
-            </div>
-            <pre class="json-code-block"><code id="drawerInputJson">[]</code></pre>
-          </div>
-        </div>
-
-        <!-- Drawer Tab: Output -->
-        <div class="drawer-content" id="dtabContentOutput">
-          <div class="code-container">
-            <div class="code-header">
-              <span>RETURN VALUE</span>
-              <button class="btn-copy-code" onclick="copyJsonPayload('drawerOutputJson')">Copy JSON</button>
-            </div>
-            <pre class="json-code-block"><code id="drawerOutputJson">null</code></pre>
-          </div>
-        </div>
-
-        <!-- Drawer Tab: Error Traceback -->
-        <div class="drawer-content" id="dtabContentError">
-          <div class="error-banner" id="drawerErrorMessage">
-            Exception details
-          </div>
-          <div class="code-container">
-            <div class="code-header text-rose">
-              <span>PYTHON TRACEBACK</span>
-            </div>
-            <pre class="json-code-block error-block"><code id="drawerErrorTraceback">No traceback available</code></pre>
-          </div>
-        </div>
-
-        <!-- Drawer Tab: Metadata -->
-        <div class="drawer-content" id="dtabContentMetadata">
-          <div class="meta-table">
-            <div class="meta-row"><span class="m-key">Queue</span><span class="m-val" id="dmQueue">default</span></div>
-            <div class="meta-row"><span class="m-key">Priority</span><span class="m-val" id="dmPriority">NORMAL (1)</span></div>
-            <div class="meta-row"><span class="m-key">Worker Node</span><span class="m-val" id="dmWorker">—</span></div>
-            <div class="meta-row"><span class="m-key">Retry Attempts</span><span class="m-val" id="dmRetries">0 / 3</span></div>
-            <div class="meta-row"><span class="m-key">Execution Timeout</span><span class="m-val" id="dmTimeout">300s</span></div>
-            <div class="meta-row"><span class="m-key">Enqueued At</span><span class="m-val" id="dmCreatedAt">—</span></div>
-            <div class="meta-row"><span class="m-key">Completed At</span><span class="m-val" id="dmCompletedAt">—</span></div>
-          </div>
-        </div>
-
       </div>
 
-      <div class="drawer-footer">
-        <button class="btn-secondary" onclick="replayCurrentDrawerTask()">↺ Re-execute Task</button>
-        <button class="btn-danger-outline" onclick="revokeCurrentDrawerTask()">⛔ Revoke Task</button>
-      </div>
-    </aside>
-
-  </div>
-
-  <!-- START TASK MODAL (Temporal "Start Workflow" Style) -->
-  <div class="modal-overlay" id="startTaskModalOverlay">
-    <div class="modal-card">
-      <div class="modal-header">
-        <div class="modal-title-row">
-          <h3 class="modal-title">Start Task Execution</h3>
-          <button class="btn-close" onclick="closeStartTaskModal()">✕</button>
+      <!-- Return Result -->
+      <div class="drawer-tab-content" id="dtabOutput">
+        <div class="slds-code-box">
+          <div class="code-box-header">
+            <span>OUTPUT VALUE</span>
+            <button class="slds-btn-xs" onclick="copyJsonPayload('drawerOutputJson')">Copy JSON</button>
+          </div>
+          <pre class="slds-json-code"><code id="drawerOutputJson">null</code></pre>
         </div>
-        <p class="modal-subtitle">Submit a task directly to the distributed execution queue</p>
+      </div>
+
+      <!-- Error Details -->
+      <div class="drawer-tab-content" id="dtabError">
+        <div class="slds-error-callout" id="drawerErrorMessage">Error details</div>
+        <div class="slds-code-box">
+          <div class="code-box-header text-rose">
+            <span>TRACEBACK EXCEPTION</span>
+          </div>
+          <pre class="slds-json-code error-code"><code id="drawerErrorTraceback">No traceback</code></pre>
+        </div>
+      </div>
+
+      <!-- System Details -->
+      <div class="drawer-tab-content" id="dtabMetadata">
+        <div class="slds-detail-fields">
+          <div class="field-item"><span class="f-label">Queue</span><span class="f-val" id="dmQueue">default</span></div>
+          <div class="field-item"><span class="f-label">Priority Tier</span><span class="f-val" id="dmPriority">NORMAL (1)</span></div>
+          <div class="field-item"><span class="f-label">Worker Assignment</span><span class="f-val" id="dmWorker">—</span></div>
+          <div class="field-item"><span class="f-label">Retry Attempts</span><span class="f-val" id="dmRetries">0 / 3</span></div>
+          <div class="field-item"><span class="f-label">Execution Timeout</span><span class="f-val" id="dmTimeout">300s</span></div>
+          <div class="field-item"><span class="f-label">Created At</span><span class="f-val" id="dmCreatedAt">—</span></div>
+          <div class="field-item"><span class="f-label">Completed At</span><span class="f-val" id="dmCompletedAt">—</span></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="drawer-footer">
+      <button class="slds-btn slds-btn-neutral" onclick="replayCurrentDrawerTask()">↺ Re-execute Task</button>
+      <button class="slds-btn slds-btn-destructive" onclick="revokeCurrentDrawerTask()">⛔ Revoke Task</button>
+    </div>
+  </aside>
+
+  <!-- =========================================================================
+       SALESFORCE LIGHTNING "NEW TASK" MODAL DIALOG
+       ========================================================================= -->
+  <div class="slds-modal-backdrop" id="startTaskModalOverlay">
+    <div class="slds-modal-card">
+      <div class="modal-card-header">
+        <h2 class="modal-card-title">New Task Execution</h2>
+        <button class="slds-modal-close" onclick="closeStartTaskModal()">✕</button>
       </div>
 
       <form id="startTaskForm" onsubmit="handleStartTaskSubmit(event)">
-        <div class="modal-body">
-          
-          <div class="form-group">
-            <label class="form-label">Task Definition</label>
-            <div class="input-with-presets">
-              <input type="text" class="form-input" id="modalTaskName" value="celerlite.demo.add" required />
-              <select class="form-select preset-select" onchange="applyTaskPreset(this.value)">
-                <option value="">Presets...</option>
-                <option value="celerlite.demo.add">[Math] celerlite.demo.add</option>
-                <option value="celerlite.demo.multiply">[Math] celerlite.demo.multiply</option>
-                <option value="celerlite.demo.send_email">[Email] celerlite.demo.send_email</option>
-                <option value="celerlite.demo.heavy_computation">[CPU] celerlite.demo.heavy_computation</option>
-                <option value="celerlite.demo.failing_task">[Fault] celerlite.demo.failing_task (DLQ)</option>
+        <div class="modal-card-body">
+          <div class="slds-form-element">
+            <label class="slds-form-label"><span class="required">*</span> Task Definition</label>
+            <div class="slds-input-group">
+              <input type="text" class="slds-input" id="modalTaskName" value="celerlite.demo.add" required />
+              <select class="slds-select slds-preset-select" onchange="applyTaskPreset(this.value)">
+                <option value="">Quick Presets...</option>
+                <option value="celerlite.demo.add">Math: Add 15+25</option>
+                <option value="celerlite.demo.multiply">Math: Multiply 7*8</option>
+                <option value="celerlite.demo.send_email">Email: Send Invoice</option>
+                <option value="celerlite.demo.heavy_computation">Compute: CPU Benchmark</option>
+                <option value="celerlite.demo.failing_task">Fault: DLQ Failure Demo</option>
               </select>
             </div>
           </div>
 
-          <div class="form-row-2">
-            <div class="form-group">
-              <label class="form-label">Task Queue</label>
-              <select class="form-select" id="modalTaskQueue">
+          <div class="slds-form-row">
+            <div class="slds-form-element">
+              <label class="slds-form-label">Task Queue</label>
+              <select class="slds-select" id="modalTaskQueue">
                 <option value="default" selected>default</option>
                 <option value="emails">emails</option>
                 <option value="payments">payments</option>
@@ -633,9 +651,9 @@
               </select>
             </div>
 
-            <div class="form-group">
-              <label class="form-label">Priority Level</label>
-              <select class="form-select" id="modalTaskPriority">
+            <div class="slds-form-element">
+              <label class="slds-form-label">Priority Level</label>
+              <select class="slds-select" id="modalTaskPriority">
                 <option value="0">LOW (0)</option>
                 <option value="1" selected>NORMAL (1)</option>
                 <option value="2">HIGH (2)</option>
@@ -644,39 +662,39 @@
             </div>
           </div>
 
-          <div class="form-group">
-            <label class="form-label">Arguments (JSON Array)</label>
-            <textarea class="form-textarea" id="modalTaskArgs" rows="2">[15, 25]</textarea>
+          <div class="slds-form-element">
+            <label class="slds-form-label">Positional Arguments (JSON Array)</label>
+            <textarea class="slds-textarea" id="modalTaskArgs" rows="2">[15, 25]</textarea>
           </div>
 
-          <div class="form-group">
-            <label class="form-label">Keyword Arguments (JSON Object)</label>
-            <textarea class="form-textarea" id="modalTaskKwargs" rows="2">{}</textarea>
+          <div class="slds-form-element">
+            <label class="slds-form-label">Keyword Arguments (JSON Object)</label>
+            <textarea class="slds-textarea" id="modalTaskKwargs" rows="2">{}</textarea>
           </div>
 
-          <div class="form-row-2">
-            <div class="form-group">
-              <label class="form-label">Max Retries</label>
-              <input type="number" class="form-input" id="modalTaskRetries" value="3" min="0" max="10" />
+          <div class="slds-form-row">
+            <div class="slds-form-element">
+              <label class="slds-form-label">Max Retries</label>
+              <input type="number" class="slds-input" id="modalTaskRetries" value="3" min="0" max="10" />
             </div>
-            <div class="form-group">
-              <label class="form-label">Timeout (seconds)</label>
-              <input type="number" class="form-input" id="modalTaskTimeout" value="300" min="1" />
+
+            <div class="slds-form-element">
+              <label class="slds-form-label">Timeout (Seconds)</label>
+              <input type="number" class="slds-input" id="modalTaskTimeout" value="300" min="1" />
             </div>
           </div>
-
         </div>
 
-        <div class="modal-footer">
-          <button type="button" class="btn-subtle" onclick="closeStartTaskModal()">Cancel</button>
-          <button type="submit" class="btn-primary" id="btnSubmitModal">Start Execution →</button>
+        <div class="modal-card-footer">
+          <button type="button" class="slds-btn slds-btn-neutral" onclick="closeStartTaskModal()">Cancel</button>
+          <button type="submit" class="slds-btn slds-btn-brand" id="btnSubmitModal">Save & Run Task</button>
         </div>
       </form>
     </div>
   </div>
 
   <!-- Toast Notification Container -->
-  <div class="toast-container" id="toastContainer"></div>
+  <div class="slds-toast-container" id="toastContainer"></div>
 
   <!-- Real-time JavaScript Driver -->
   <script src="/static/app.js"></script>
