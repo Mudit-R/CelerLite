@@ -35,11 +35,18 @@ _is_vercel = bool(
     or os.environ.get("AWS_LAMBDA_FUNCTION_NAME")
     or os.environ.get("VERCEL_ENV")
 )
-_initial_db_url = (
-    "sqlite+aiosqlite:////tmp/celerlite_dev.db"
-    if _is_vercel
-    else config.DATABASE_URL
-)
+
+
+def _get_initial_db_url() -> str:
+    explicit = os.environ.get("CELERLITE_DATABASE_URL") or os.environ.get("DATABASE_URL")
+    if explicit:
+        return explicit
+    if _is_vercel:
+        return "sqlite+aiosqlite:////tmp/celerlite_dev.db"
+    return config.DATABASE_URL
+
+
+_initial_db_url = _get_initial_db_url()
 
 engine = _create_engine(_initial_db_url)
 AsyncSessionLocal = async_sessionmaker(

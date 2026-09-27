@@ -153,6 +153,7 @@ def create_app(serverless: bool = False) -> FastAPI:
         return ""
 
     @app.get("/static/{file_path:path}", include_in_schema=False)
+    @app.get("/api/static/{file_path:path}", include_in_schema=False)
     async def serve_static_file(file_path: str):
         full_path = get_dashboard_path(file_path)
         if full_path and os.path.isfile(full_path):
@@ -168,6 +169,8 @@ def create_app(serverless: bool = False) -> FastAPI:
         return Response(content="/* asset not found */", media_type="text/plain", status_code=404)
 
     @app.get("/", response_class=HTMLResponse, include_in_schema=False)
+    @app.get("/api", response_class=HTMLResponse, include_in_schema=False)
+    @app.get("/api/index.py", response_class=HTMLResponse, include_in_schema=False)
     async def serve_dashboard():
         index_file = get_dashboard_path("index.html")
         if index_file and os.path.isfile(index_file):
