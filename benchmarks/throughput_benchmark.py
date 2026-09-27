@@ -103,7 +103,7 @@ async def main():
     for n, desc in configs:
         r = await run_benchmark(n, desc)
         results.append(r)
-        print(f"  ✓ {desc}: {r['tps']:,.0f} tasks/sec in {r['duration_s']}s ({r['completed']}/{n} completed)")
+        print(f"  [OK] {desc}: {r['tps']:,.0f} tasks/sec in {r['duration_s']}s ({r['completed']}/{n} completed)")
 
     print("\n" + "=" * 72)
     print(f"  {'Tasks':>10} | {'Duration':>10} | {'Throughput':>15}")

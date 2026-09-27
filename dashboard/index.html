@@ -53,7 +53,7 @@
           <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
         </svg>
         <input type="text" id="globalSearchInput" placeholder="Search CelerLite Tasks, Queues, Workers, and DLQ..." oninput="handleSearch(this.value)" />
-        <span class="search-shortcut">⌘K</span>
+        <span class="search-shortcut">Ctrl+K</span>
       </div>
     </div>
 
@@ -66,7 +66,7 @@
       </div>
 
       <!-- Quick Actions -->
-      <button class="slds-icon-btn" title="Favorites">★</button>
+      <button class="slds-icon-btn" title="Favorites"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon></svg></button>
       <button class="slds-icon-btn" title="New Task (Quick Action)" onclick="openStartTaskModal()">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
           <line x1="12" y1="5" x2="12" y2="19"></line>
@@ -100,33 +100,33 @@
   <nav class="slds-nav-bar">
     <div class="slds-nav-tabs">
       <button class="slds-nav-tab active" data-tab="executions" onclick="switchTab('executions')">
-        <span class="tab-icon">⚡</span>
+        <span class="tab-icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon></svg></span>
         <span class="tab-label">Tasks & Workflows</span>
       </button>
 
       <button class="slds-nav-tab" data-tab="queues" onclick="switchTab('queues')">
-        <span class="tab-icon">📦</span>
+        <span class="tab-icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="8" y1="6" x2="21" y2="6"></line><line x1="8" y1="12" x2="21" y2="12"></line><line x1="8" y1="18" x2="21" y2="18"></line><line x1="3" y1="6" x2="3.01" y2="6"></line><line x1="3" y1="12" x2="3.01" y2="12"></line><line x1="3" y1="18" x2="3.01" y2="18"></line></svg></span>
         <span class="tab-label">Task Queues</span>
       </button>
 
       <button class="slds-nav-tab" data-tab="workers" onclick="switchTab('workers')">
-        <span class="tab-icon">🤖</span>
+        <span class="tab-icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="2" width="20" height="8" rx="2" ry="2"></rect><rect x="2" y="14" width="20" height="8" rx="2" ry="2"></rect><line x1="6" y1="6" x2="6.01" y2="6"></line><line x1="6" y1="18" x2="6.01" y2="18"></line></svg></span>
         <span class="tab-label">Worker Fleet</span>
       </button>
 
       <button class="slds-nav-tab" data-tab="dlq" onclick="switchTab('dlq')">
-        <span class="tab-icon">☠️</span>
+        <span class="tab-icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg></span>
         <span class="tab-label">Dead Letter Queue</span>
         <span class="tab-count-badge" id="tabCountDLQ">0</span>
       </button>
 
       <button class="slds-nav-tab" data-tab="dashboards" onclick="switchTab('dashboards')">
-        <span class="tab-icon">📊</span>
+        <span class="tab-icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="20" x2="18" y2="10"></line><line x1="12" y1="20" x2="12" y2="4"></line><line x1="6" y1="20" x2="6" y2="14"></line></svg></span>
         <span class="tab-label">Dashboards & Reports</span>
       </button>
 
       <button class="slds-nav-tab" data-tab="settings" onclick="switchTab('settings')">
-        <span class="tab-icon">⚙️</span>
+        <span class="tab-icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg></span>
         <span class="tab-label">Cluster Setup</span>
       </button>
     </div>
@@ -155,7 +155,7 @@
               <div class="slds-breadcrumb-header">TASKS & WORKFLOWS</div>
               <h1 class="slds-page-title">
                 <span id="currentListViewTitle">Recently Viewed</span>
-                <span class="slds-title-dropdown-icon">▼</span>
+                <span class="slds-title-dropdown-icon"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"></polyline></svg></span>
               </h1>
               <div class="slds-header-meta">
                 <span id="recordCountMeta">0 items</span> • <span id="lastUpdatedMeta">Updated just now</span>
@@ -219,11 +219,11 @@
         <div class="slds-path-label">EXECUTION PATH LIFECYCLE:</div>
         <div class="slds-path-track">
           <div class="slds-path-step step-complete" id="pathStepScheduled">
-            <span class="path-check">✓</span>
+            <span class="path-check"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"></polyline></svg></span>
             <span class="path-title">SCHEDULED</span>
           </div>
           <div class="slds-path-step step-complete" id="pathStepQueued">
-            <span class="path-check">✓</span>
+            <span class="path-check"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"></polyline></svg></span>
             <span class="path-title">QUEUED</span>
           </div>
           <div class="slds-path-step step-active" id="pathStepRunning">
@@ -261,7 +261,7 @@
             </table>
 
             <div id="executionsEmptyState" class="slds-empty-state" style="display: none;">
-              <div class="slds-empty-icon">📂</div>
+              <div class="slds-empty-icon"><svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path></svg></div>
               <div class="slds-empty-title">No task records found in this view</div>
               <div class="slds-empty-sub">Click "New Task" or "+ Generate Demo Tasks" to start asynchronous executions.</div>
             </div>
@@ -278,7 +278,7 @@
         <aside class="slds-copilot-card">
           <div class="copilot-header">
             <div class="copilot-badge">
-              <span class="copilot-sparkle">✨</span>
+              <span class="copilot-sparkle"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2l2.4 5.6L20 10l-4.4 4.4L17 20l-5-2.6-5 2.6 1.4-5.6L4 10l5.6-2.4z"></path></svg></span>
               <span class="copilot-title">Einstein Task Intelligence</span>
             </div>
             <span class="copilot-tag">AGENTFORCE AI</span>
@@ -298,7 +298,7 @@
 
             <!-- Insights Feed -->
             <div class="copilot-insight">
-              <div class="insight-icon">💡</div>
+              <div class="insight-icon"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="9" y1="18" x2="15" y2="18"></line><line x1="10" y1="22" x2="14" y2="22"></line><path d="M15.09 14c.18-.98.65-1.74 1.41-2.5A4.65 4.65 0 0 0 18 8 6 6 0 0 0 6 8c0 1 .23 2.23 1.5 3.5A4.61 4.61 0 0 1 8.91 14"></path></svg></div>
               <div class="insight-content">
                 <div class="insight-title">Zero Worker Bottleneck Detected</div>
                 <div class="insight-desc">Throughput is optimal at <b id="copilotTps">0.0 tps</b> with late ACK guarantees active.</div>
@@ -306,7 +306,7 @@
             </div>
 
             <div class="copilot-insight">
-              <div class="insight-icon">⚡</div>
+              <div class="insight-icon"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon></svg></div>
               <div class="insight-content">
                 <div class="insight-title">Automatic DLQ Isolation</div>
                 <div class="insight-desc">All unrecoverable task exceptions are automatically quarantined for zero data loss.</div>
@@ -330,7 +330,7 @@
     <section id="tabQueues" class="slds-tab-panel">
       <div class="slds-page-header">
         <div class="slds-media">
-          <div class="slds-object-icon object-queue">📦</div>
+          <div class="slds-object-icon object-queue"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="8" y1="6" x2="21" y2="6"></line><line x1="8" y1="12" x2="21" y2="12"></line><line x1="8" y1="18" x2="21" y2="18"></line><line x1="3" y1="6" x2="3.01" y2="6"></line><line x1="3" y1="12" x2="3.01" y2="12"></line><line x1="3" y1="18" x2="3.01" y2="18"></line></svg></div>
           <div class="slds-media-body">
             <div class="slds-breadcrumb-header">INFRASTRUCTURE</div>
             <h1 class="slds-page-title">Task Queues & Priority Partitions</h1>
@@ -348,7 +348,7 @@
     <section id="tabWorkers" class="slds-tab-panel">
       <div class="slds-page-header">
         <div class="slds-media">
-          <div class="slds-object-icon object-worker">🤖</div>
+          <div class="slds-object-icon object-worker"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="2" width="20" height="8" rx="2" ry="2"></rect><rect x="2" y="14" width="20" height="8" rx="2" ry="2"></rect><line x1="6" y1="6" x2="6.01" y2="6"></line><line x1="6" y1="18" x2="6.01" y2="18"></line></svg></div>
           <div class="slds-media-body">
             <div class="slds-breadcrumb-header">NODES</div>
             <h1 class="slds-page-title">Worker Fleet & Heartbeat Telemetry</h1>
@@ -386,7 +386,7 @@
     <section id="tabDlq" class="slds-tab-panel">
       <div class="slds-page-header">
         <div class="slds-media">
-          <div class="slds-object-icon object-dlq">☠️</div>
+          <div class="slds-object-icon object-dlq"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg></div>
           <div class="slds-media-body">
             <div class="slds-breadcrumb-header">INCIDENT MANAGEMENT</div>
             <h1 class="slds-page-title">Dead Letter Queue (DLQ)</h1>
@@ -417,7 +417,7 @@
           </table>
 
           <div id="dlqEmptyState" class="slds-empty-state" style="display: none;">
-            <div class="slds-empty-icon" style="color: #2e844a;">✓</div>
+            <div class="slds-empty-icon" style="color: #2e844a;"><svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"></polyline></svg></div>
             <div class="slds-empty-title">Dead Letter Queue is clear</div>
             <div class="slds-empty-sub">All distributed tasks are completing without unrecoverable errors.</div>
           </div>
@@ -429,7 +429,7 @@
     <section id="tabDashboards" class="slds-tab-panel">
       <div class="slds-page-header">
         <div class="slds-media">
-          <div class="slds-object-icon object-dashboard">📊</div>
+          <div class="slds-object-icon object-dashboard"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="20" x2="18" y2="10"></line><line x1="12" y1="20" x2="12" y2="4"></line><line x1="6" y1="20" x2="6" y2="14"></line></svg></div>
           <div class="slds-media-body">
             <div class="slds-breadcrumb-header">EXECUTIVE REPORT</div>
             <h1 class="slds-page-title">Executive Operations & Velocity Dashboard</h1>
@@ -492,7 +492,7 @@
     <section id="tabSettings" class="slds-tab-panel">
       <div class="slds-page-header">
         <div class="slds-media">
-          <div class="slds-object-icon object-setup">⚙️</div>
+          <div class="slds-object-icon object-setup"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg></div>
           <div class="slds-media-body">
             <div class="slds-breadcrumb-header">CONFIGURATION</div>
             <h1 class="slds-page-title">Salesforce Lightning Cluster Settings</h1>
@@ -533,13 +533,13 @@
           <span class="slds-drawer-badge" id="drawerStatusBadge">SUCCESS</span>
           <h2 class="drawer-record-name" id="drawerTaskName">celerlite.demo.add</h2>
         </div>
-        <button class="slds-close-btn" onclick="closeTaskDrawer()" title="Close">✕</button>
+        <button class="slds-close-btn" onclick="closeTaskDrawer()" title="Close"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg></button>
       </div>
 
       <div class="drawer-record-id-bar">
         <span class="id-label">RECORD ID:</span>
         <code class="id-value" id="drawerTaskId">e6a2b0fd-4f11-48e0...</code>
-        <button class="slds-copy-icon-btn" onclick="copyCurrentTaskId()" title="Copy Task ID">📋</button>
+        <button class="slds-copy-icon-btn" onclick="copyCurrentTaskId()" title="Copy Task ID"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg></button>
       </div>
 
       <!-- Lightning Record Tabs -->
@@ -609,7 +609,7 @@
 
     <div class="drawer-footer">
       <button class="slds-btn slds-btn-neutral" onclick="replayCurrentDrawerTask()">↺ Re-execute Task</button>
-      <button class="slds-btn slds-btn-destructive" onclick="revokeCurrentDrawerTask()">⛔ Revoke Task</button>
+      <button class="slds-btn slds-btn-destructive" onclick="revokeCurrentDrawerTask()">Revoke Task</button>
     </div>
   </aside>
 
@@ -620,7 +620,7 @@
     <div class="slds-modal-card">
       <div class="modal-card-header">
         <h2 class="modal-card-title">New Task Execution</h2>
-        <button class="slds-modal-close" onclick="closeStartTaskModal()">✕</button>
+        <button class="slds-modal-close" onclick="closeStartTaskModal()"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg></button>
       </div>
 
       <form id="startTaskForm" onsubmit="handleStartTaskSubmit(event)">

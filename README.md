@@ -1,4 +1,4 @@
-# ⚡ CelerLite — Distributed Task Queue & Execution Engine
+# CelerLite — Distributed Task Queue & Execution Engine
 
 [![Python](https://img.shields.io/badge/Python-3.11%20%7C%203.12-blue?logo=python&logoColor=white)](https://python.org)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.115+-009688?logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com)
@@ -12,7 +12,7 @@
 
 ---
 
-## 📑 Table of Contents
+## Table of Contents
 
 - [System Architecture](#-system-architecture)
 - [Core Engineering Highlights](#-core-engineering-highlights)
@@ -28,7 +28,7 @@
 
 ---
 
-## 🏛 System Architecture
+## System Architecture
 
 CelerLite decouples producers and consumers using an asynchronous broker architecture with strict separation between hot-path scheduling (Redis) and durable queryable persistence (PostgreSQL):
 
@@ -39,7 +39,7 @@ CelerLite decouples producers and consumers using an asynchronous broker archite
                         └───────────────────────┬────────────────────────┘
                                                 │
                                     (1) Enqueue task payload
-                                                ▼
+                                                v
   ┌────────────────────────────────────────────────────────────────────────────────────────┐
   │                                   Redis Broker Layer                                   │
   │  ┌───────────────────────┬────────────────────────┬─────────────────────────────────┐  │
@@ -49,30 +49,30 @@ CelerLite decouples producers and consumers using an asynchronous broker archite
   │  │  • queue:normal       │  • celerlite:results:* │                                 │  │
   │  │  • queue:low          │  • celerlite:heartbeat │                                 │  │
   │  └───────────────────────┴────────────────────────┴─────────────────────────────────┘  │
-  └───────────────────▲───────────────────────────┬───────────────────────────────▲────────┘
+  └───────────────────^───────────────────────────┬───────────────────────────────^────────┘
                       │                           │                               │
         (2) Strict Priority Dequeue   (3) Push Heartbeats & Events    (4) Stream Events
                       │                           │                               │
-                      ▼                           ▼                               ▼
+                      v                           v                               v
   ┌─────────────────────────────────┐ ┌───────────────────────────┐ ┌──────────────────────────┐
   │     Distributed Worker Pool     │ │   PostgreSQL Persistence  │ │   FastAPI Gateway Server │
   │ ┌─────────────────────────────┐ │ │ ┌───────────────────────┐ │ │  • REST API (/api/v1)    │
   │ │ Worker Pool Manager         │ │ │ │ Tasks Audit Log       │ │ │  • WebSocket Stream      │
   │ │  • Dynamic Forking & Reap   │ │ │ │ Workers Fleet Table   │ │ │  • Prometheus Exporter   │
-  │ │  • Heartbeat Supervisor     │ │ │ │ Dead Letter Queue     │ │ │  • Glassmorphic UI       │
+  │ │  • Heartbeat Supervisor     │ │ │ │ Dead Letter Queue     │ │ │  • Salesforce Lightning UI       │
   │ ├─────────────────────────────┤ │ │ └───────────────────────┘ │ └─────────────┬────────────┘
   │ │ Worker Process [1..N]       │ │ └───────────────────────────┘               │
   │ │  • Token-Bucket Limiter     │ │                                             │ WebSockets
-  │ │  • Late Ack (TASK_ACK_LATE) │ │                                             ▼
+  │ │  • Late Ack (TASK_ACK_LATE) │ │                                             v
   │ │  • Timeout Isolation (SIG)  │ │                              ┌───────────────────────────┐
-  │ └─────────────────────────────┘ │                              │  Dark-Mode Real-Time UI   │
+  │ └─────────────────────────────┘ │                              │  Salesforce Lightning Console   │
   └─────────────────────────────────┘                              │  Live KPIs, Donut, Fleet  │
                                                                    └───────────────────────────┘
 ```
 
 ---
 
-## 💎 Core Engineering Highlights
+## Core Engineering Highlights
 
 ### 1. Strict Priority Scheduling (Multi-Queue Ordering)
 Tasks are enqueued into separate Redis data structures indexed by priority (`CRITICAL=3`, `HIGH=2`, `NORMAL=1`, `LOW=0`). Workers drain queues in strict priority order via atomic multi-queue polling, ensuring mission-critical workloads (e.g. payment processing, fraud alerts) are never starved by high-volume background jobs (e.g. batch reports).
@@ -106,7 +106,7 @@ A native vanilla CSS/JS dashboard served directly by FastAPI:
 
 ---
 
-## 📊 Performance & Benchmarks
+## Performance & Benchmarks
 
 Benchmarks run on AMD Ryzen 7 8845HS / 16GB RAM / Redis 7 (Localhost):
 
@@ -126,7 +126,7 @@ python benchmarks/throughput_benchmark.py
 
 ---
 
-## 📂 Project Structure
+## Project Structure
 
 ```
 CelerLite/
@@ -182,7 +182,7 @@ CelerLite/
 
 ---
 
-## 🚀 Quick Start
+## Quick Start
 
 ### Option A: Full Stack with Docker Compose (Recommended)
 
@@ -239,7 +239,7 @@ python scripts/submit_demo_tasks.py
 
 ---
 
-## 💻 Python SDK Usage
+## Python SDK Usage
 
 ### 1. Defining Tasks
 
@@ -284,7 +284,7 @@ vip_task.revoke()
 
 ---
 
-## 📡 API & WebSocket Reference
+## API & WebSocket Reference
 
 ### REST Endpoints
 
@@ -322,7 +322,7 @@ Emits real-time JSON frames whenever tasks are submitted, started, completed, fa
 
 ---
 
-## 🧪 Testing & Quality Assurance
+## Testing & Quality Assurance
 
 The test suite covers unit logic, concurrency boundaries, fault tolerance, and chaos failure scenarios:
 
@@ -348,7 +348,7 @@ pytest --cov=celerlite --cov-report=term-missing
 
 ---
 
-## 💼 Resume Bullet Points for Software Engineers
+## Resume Bullet Points for Software Engineers
 
 If you are showcasing CelerLite on your resume, LinkedIn, or GitHub portfolio, here are high-impact, STAR-formatted bullet points:
 
@@ -361,6 +361,6 @@ If you are showcasing CelerLite on your resume, LinkedIn, or GitHub portfolio, h
 
 ---
 
-## 📄 License
+## License
 
 This project is licensed under the MIT License — see the [LICENSE](LICENSE) file for details.

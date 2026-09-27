@@ -460,7 +460,7 @@ async function loadDLQ() {
           <td><span class="time-val">${formatTimeAgo(e.dead_lettered_at)}</span></td>
           <td style="text-align: right;">
             <button class="slds-btn slds-btn-neutral slds-btn-xs" onclick="replayDLQEntry('${escapeHtml(e.id)}')">↺ Replay</button>
-            <button class="slds-btn slds-btn-xs" style="color: var(--slds-error);" onclick="deleteDLQEntry('${escapeHtml(e.id)}')">✕</button>
+            <button class="slds-btn slds-btn-xs" style="color: var(--slds-error);" onclick="deleteDLQEntry('${escapeHtml(e.id)}')">Delete</button>
           </td>
         </tr>
       `).join('');
@@ -632,7 +632,7 @@ function renderTimelineStepper(task) {
 
   container.innerHTML = `
     <div class="timeline-step">
-      <div class="t-icon done">✓</div>
+      <div class="t-icon done"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"></polyline></svg></div>
       <div class="t-details">
         <div class="t-title">Task Scheduled & Partitioned</div>
         <div class="t-time">${task.created_at ? new Date(task.created_at).toLocaleTimeString() : '—'}</div>
@@ -642,7 +642,7 @@ function renderTimelineStepper(task) {
 
     <div class="timeline-step">
       <div class="t-icon ${isRunning ? 'active' : (isCompleted || isFailed ? 'done' : '')}">
-        ${isRunning ? '▶' : (isCompleted || isFailed ? '✓' : '○')}
+        ${isRunning ? '<svg width="9" height="9" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>' : (isCompleted || isFailed ? '<svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"></polyline></svg>' : '<span class="dot-pending"></span>')}
       </div>
       <div class="t-details">
         <div class="t-title">Worker Process Acquired</div>
@@ -653,7 +653,7 @@ function renderTimelineStepper(task) {
 
     <div class="timeline-step">
       <div class="t-icon ${isCompleted ? 'done' : (isFailed ? 'error' : '')}">
-        ${isCompleted ? '✓' : (isFailed ? '✕' : '○')}
+        ${isCompleted ? '<svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"></polyline></svg>' : (isFailed ? '<svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>' : '<span class="dot-pending"></span>')}
       </div>
       <div class="t-details">
         <div class="t-title">${isCompleted ? 'Execution Succeeded' : (isFailed ? 'Execution Failed' : 'Pending Completion')}</div>
@@ -1062,7 +1062,7 @@ function showToast(message, type = 'info') {
   const toast = document.createElement('div');
   toast.className = `slds-toast toast-${type}`;
   toast.innerHTML = `
-    <span>${type === 'success' ? '✓' : (type === 'error' ? '✕' : 'ℹ')}</span>
+    <span>${type === 'success' ? '[OK]' : (type === 'error' ? '[ERR]' : '[INFO]')}</span>
     <span>${escapeHtml(message)}</span>
   `;
 
