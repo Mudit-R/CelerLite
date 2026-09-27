@@ -1,5 +1,6 @@
 """Async SQLAlchemy engine and session factory with automatic SQLite fallback."""
 
+import os
 from contextlib import asynccontextmanager
 from typing import AsyncIterator
 
@@ -27,30 +28,40 @@ def _create_engine(url: str):
     )
 
 
-engine = _create_engine(config.DATABASE_URL)
+# In Vercel serverless / read-only filesystem environments, default directly to SQLite in /tmp
+_is_vercel = bool(os.environ.get("VERCEL"))
+_initial_db_url = (
+    "sqlite+aiosqlite:////tmp/celerlite_dev.db"
+    if _is_vercel
+    else config.DATABASE_URL
+)
+
+engine = _create_engine(_initial_db_url)
 AsyncSessionLocal = async_sessionmaker(
     engine,
     class_=AsyncSession,
     expire_on_commit=False,
 )
 
+_db_initialized = False
+
 
 async def init_db() -> None:
     """Create all tables. Automatically falls back to SQLite if PostgreSQL is unreachable."""
-    global engine, AsyncSessionLocal
+    global engine, AsyncSessionLocal, _db_initialized
     try:
         async with engine.begin() as conn:
             await conn.run_sync(Base.metadata.create_all)
+        _db_initialized = True
         logger.info("db_initialized", url=str(engine.url))
     except Exception as e:
         if "postgresql" in str(engine.url):
             logger.warning(
                 "postgres_unavailable_fallback_sqlite",
-                msg="PostgreSQL unreachable at localhost:5432. Falling back to local SQLite database (celerlite_dev.db)",
+                msg="PostgreSQL unreachable. Falling back to SQLite database.",
                 error=str(e),
             )
-            import os
-            db_path = "/tmp/celerlite_dev.db" if os.environ.get("VERCEL") else "./celerlite_dev.db"
+            db_path = "/tmp/celerlite_dev.db" if _is_vercel else "./celerlite_dev.db"
             sqlite_url = f"sqlite+aiosqlite:///{db_path}"
             engine = _create_engine(sqlite_url)
             AsyncSessionLocal = async_sessionmaker(
@@ -60,9 +71,17 @@ async def init_db() -> None:
             )
             async with engine.begin() as conn:
                 await conn.run_sync(Base.metadata.create_all)
+            _db_initialized = True
             logger.info("db_fallback_sqlite_initialized", url=sqlite_url)
         else:
             raise
+
+
+async def ensure_db_ready() -> None:
+    """Ensure database tables are created (essential for serverless where lifespan may not run)."""
+    global _db_initialized
+    if not _db_initialized:
+        await init_db()
 
 
 async def drop_db() -> None:
@@ -73,7 +92,8 @@ async def drop_db() -> None:
 
 @asynccontextmanager
 async def get_session() -> AsyncIterator[AsyncSession]:
-    """Async context manager for a database session."""
+    """Async context manager for a database session with lazy initialization."""
+    await ensure_db_ready()
     async with AsyncSessionLocal() as session:
         try:
             yield session

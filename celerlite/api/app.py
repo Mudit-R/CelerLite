@@ -20,7 +20,11 @@ logger = get_logger(__name__)
 _broker: RedisBroker = None
 
 
-def get_broker() -> RedisBroker:
+def get_broker():
+    global _broker
+    if _broker is None:
+        from celerlite.broker.memory_broker import InMemoryBroker
+        _broker = InMemoryBroker(config)
     return _broker
 
 
