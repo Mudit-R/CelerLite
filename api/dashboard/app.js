@@ -1,50 +1,49 @@
 /* ==========================================================================
-   CelerLite Console — Salesforce Lightning Platform Controller
-   Real-time SLDS App, Tab Switching, Sales Path, Einstein AI, Drawer & Modal
+   CelerLite CRM — Salesforce Lightning Enterprise Platform Controller
+   Full CRM State Management, Leads, Kanban Pipeline, Accounts, Contacts,
+   Activity Timelines, AI Automations & CelerLite Engine Telemetry
    ========================================================================== */
 
 'use strict';
 
 const API = location.host ? '' : 'http://localhost:8000';
-let ws = null;
-let currentTab = 'executions';
-let currentStatusFilter = '';
-let currentQueueFilter = '';
-let searchQuery = '';
-let currentDrawerTask = null;
-let currentDrawerTaskId = null;
+let currentTab = 'crm-home';
+let currentSearch = '';
+let pipelineChart = null;
+let dealDonutChart = null;
 
-// Telemetry & State Cache
-let executionsList = [];
-let throughputChart = null;
-let statusDonutChart = null;
-let throughputHistory = [];
-let autoRefreshTimer = null;
+// Telemetry & Cache
+let crmStats = {};
+let leadsList = [];
+let dealsList = [];
+let accountsList = [];
+let contactsList = [];
+let activitiesList = [];
+let engineTasksList = [];
 
 // ==========================================================================
 // INITIALIZATION
 // ==========================================================================
 
 document.addEventListener('DOMContentLoaded', () => {
-  initWebSocket();
-  initCharts();
-  loadAllData();
   setupKeyboardShortcuts();
+  initDefaultCloseDate();
+  loadAllCRMData();
 
-  // Auto-refresh stats every 4 seconds
-  setInterval(loadStats, 4000);
+  // Auto-refresh CRM stats every 5 seconds
+  setInterval(loadCRMStats, 5000);
 });
 
 function setupKeyboardShortcuts() {
   document.addEventListener('keydown', (e) => {
-    // ESC closes drawer or modal
+    // ESC closes drawer or any open modal
     if (e.key === 'Escape') {
-      closeTaskDrawer();
-      closeStartTaskModal();
+      closeDetailDrawer();
+      document.querySelectorAll('.slds-modal-backdrop.open').forEach(m => m.classList.remove('open'));
     }
-    // Command+K or '/' focuses search
-    if ((e.key === '/' || (e.key === 'k' && (e.metaKey || e.ctrlKey))) && 
-        document.activeElement.tagName !== 'INPUT' && 
+    // Ctrl+K or '/' focuses search
+    if ((e.key === '/' || (e.key === 'k' && (e.metaKey || e.ctrlKey))) &&
+        document.activeElement.tagName !== 'INPUT' &&
         document.activeElement.tagName !== 'TEXTAREA') {
       e.preventDefault();
       const search = document.getElementById('globalSearchInput');
@@ -53,1007 +52,1002 @@ function setupKeyboardShortcuts() {
   });
 }
 
-// ==========================================================================
-// WEBSOCKET TELEMETRY
-// ==========================================================================
-
-function initWebSocket() {
-  const proto = location.protocol === 'https:' ? 'wss' : 'ws';
-  const host = location.host || 'localhost:8000';
-  const url = `${proto}://${host}/api/v1/ws/events`;
-
-  try {
-    ws = new WebSocket(url);
-
-    ws.onopen = () => {
-      setConnectionStatus(true);
-      console.log('[SLDS WS] Connected to CelerLite event bus');
-    };
-
-    ws.onmessage = (event) => {
-      try {
-        const payload = JSON.parse(event.data);
-        if (payload.event && payload.event !== 'connected') {
-          handleIncomingEvent(payload);
-        }
-      } catch (err) {
-        console.warn('[SLDS WS] Event parse error', err);
-      }
-    };
-
-    ws.onclose = () => {
-      setConnectionStatus(false);
-      setTimeout(initWebSocket, 3000);
-    };
-
-    ws.onerror = () => {
-      if (ws) ws.close();
-    };
-  } catch (err) {
-    setConnectionStatus(false);
-    setTimeout(initWebSocket, 3000);
-  }
-}
-
-function setConnectionStatus(connected) {
-  const dot = document.getElementById('wsPulseDot');
-  const text = document.getElementById('wsStatusText');
-
-  if (connected) {
-    if (dot) dot.style.backgroundColor = '#31e87d';
-    if (text) text.textContent = 'Connected (Live)';
-  } else {
-    if (dot) dot.style.backgroundColor = '#ea001e';
-    if (text) text.textContent = 'Reconnecting...';
-  }
-}
-
-function handleIncomingEvent(event) {
-  const existingIdx = executionsList.findIndex(t => t.id === event.task_id);
-  const nowIso = new Date().toISOString();
-
-  if (existingIdx !== -1) {
-    const task = executionsList[existingIdx];
-    if (event.event === 'task_started') {
-      task.status = 'RUNNING';
-      task.worker_id = event.worker_id;
-      task.started_at = nowIso;
-      updateSalesPath('RUNNING');
-    } else if (event.event === 'task_completed') {
-      task.status = 'SUCCESS';
-      task.completed_at = nowIso;
-      task.duration_ms = event.duration_ms;
-      updateSalesPath('SUCCESS');
-    } else if (event.event === 'task_failed') {
-      task.status = 'FAILED';
-      task.completed_at = nowIso;
-      task.error_message = event.error;
-      updateSalesPath('FAILED');
-    }
-  } else if (event.task_id) {
-    const status = event.event === 'task_started' ? 'RUNNING' : (event.event === 'task_completed' ? 'SUCCESS' : 'PENDING');
-    executionsList.unshift({
-      id: event.task_id,
-      task_name: event.task_name || 'celerlite.task',
-      status: status,
-      queue: event.queue || 'default',
-      priority: event.priority ?? 1,
-      worker_id: event.worker_id || null,
-      created_at: nowIso,
-      started_at: event.event === 'task_started' ? nowIso : null,
-      completed_at: event.event === 'task_completed' ? nowIso : null,
-      duration_ms: event.duration_ms || null,
-    });
-    updateSalesPath(status);
-  }
-
-  if (currentTab === 'executions') {
-    renderExecutionsTable();
-  }
-
-  loadStats();
-
-  if (currentDrawerTaskId === event.task_id) {
-    openTaskDrawer(event.task_id, false);
+function initDefaultCloseDate() {
+  const closeDateInput = document.getElementById('dealCloseDate');
+  if (closeDateInput) {
+    const d = new Date();
+    d.setDate(d.getDate() + 30);
+    closeDateInput.value = d.toISOString().split('T')[0];
   }
 }
 
 // ==========================================================================
-// DATA LOADING & RENDERING
+// TAB SWITCHING
 // ==========================================================================
 
-async function loadAllData() {
+function switchTab(tabId) {
+  currentTab = tabId;
+
+  // Update Nav Items
+  document.querySelectorAll('.slds-nav-item').forEach(item => {
+    item.classList.toggle('active', item.getAttribute('data-tab') === tabId);
+  });
+
+  // Update Views
+  document.querySelectorAll('.tab-view').forEach(view => {
+    view.classList.toggle('active', view.id === `tab-${tabId}`);
+  });
+
+  // Re-render corresponding data
+  if (tabId === 'crm-home') {
+    renderHomeView();
+  } else if (tabId === 'leads') {
+    renderLeadsTable();
+  } else if (tabId === 'deals') {
+    renderKanbanBoard();
+  } else if (tabId === 'accounts') {
+    renderAccountsTable();
+  } else if (tabId === 'contacts') {
+    renderContactsTable();
+  } else if (tabId === 'activities') {
+    renderActivitiesTimeline();
+  } else if (tabId === 'engine') {
+    loadEngineTasks();
+  }
+}
+
+// ==========================================================================
+// DATA FETCHING & STATE MANAGEMENT
+// ==========================================================================
+
+async function loadAllCRMData() {
   await Promise.all([
-    loadExecutions(),
-    loadStats(),
-    loadQueues(),
-    loadWorkers(),
-    loadDLQ(),
-    loadMetrics(),
+    loadCRMStats(),
+    loadLeads(),
+    loadDeals(),
+    loadAccounts(),
+    loadContacts(),
+    loadActivities(),
+    loadEngineTasks(),
   ]);
 }
 
-async function loadExecutions() {
-  try {
-    let url = `${API}/api/v1/tasks?limit=100`;
-    if (currentStatusFilter) url += `&status=${encodeURIComponent(currentStatusFilter)}`;
-    if (currentQueueFilter) url += `&queue=${encodeURIComponent(currentQueueFilter)}`;
+async function refreshCRMData() {
+  await loadAllCRMData();
+  showToast('CRM data refreshed from database.', 'success');
+}
 
-    const res = await fetch(url);
-    if (res.ok) {
-      executionsList = await res.json();
-      renderExecutionsTable();
+async function loadCRMStats() {
+  try {
+    const res = await fetch(`${API}/api/v1/crm/stats`);
+    if (!res.ok) return;
+    crmStats = await res.json();
+    updateKPICards();
+    if (currentTab === 'crm-home') {
+      initOrUpdateCharts();
     }
   } catch (err) {
-    console.error('Failed to load executions', err);
+    console.warn('Failed to load CRM stats', err);
   }
 }
 
-function renderExecutionsTable() {
-  const tbody = document.getElementById('executionsTableBody');
-  const emptyState = document.getElementById('executionsEmptyState');
+async function loadLeads() {
+  try {
+    const res = await fetch(`${API}/api/v1/crm/leads?limit=100`);
+    if (!res.ok) return;
+    const data = await res.json();
+    leadsList = data.leads || [];
+    const countEl = document.getElementById('navLeadsCount');
+    if (countEl) countEl.textContent = leadsList.length;
+    if (currentTab === 'leads') renderLeadsTable();
+  } catch (err) {
+    console.warn('Failed to load leads', err);
+  }
+}
+
+async function loadDeals() {
+  try {
+    const res = await fetch(`${API}/api/v1/crm/deals?limit=100`);
+    if (!res.ok) return;
+    const data = await res.json();
+    dealsList = data.deals || [];
+    const countEl = document.getElementById('navDealsCount');
+    if (countEl) countEl.textContent = dealsList.length;
+    if (currentTab === 'deals') renderKanbanBoard();
+    if (currentTab === 'crm-home') renderHomeTopDeals();
+  } catch (err) {
+    console.warn('Failed to load deals', err);
+  }
+}
+
+async function loadAccounts() {
+  try {
+    const res = await fetch(`${API}/api/v1/crm/accounts?limit=100`);
+    if (!res.ok) return;
+    const data = await res.json();
+    accountsList = data.accounts || [];
+    if (currentTab === 'accounts') renderAccountsTable();
+  } catch (err) {
+    console.warn('Failed to load accounts', err);
+  }
+}
+
+async function loadContacts() {
+  try {
+    const res = await fetch(`${API}/api/v1/crm/contacts?limit=100`);
+    if (!res.ok) return;
+    const data = await res.json();
+    contactsList = data.contacts || [];
+    if (currentTab === 'contacts') renderContactsTable();
+  } catch (err) {
+    console.warn('Failed to load contacts', err);
+  }
+}
+
+async function loadActivities() {
+  try {
+    const res = await fetch(`${API}/api/v1/crm/activities?limit=100`);
+    if (!res.ok) return;
+    const data = await res.json();
+    activitiesList = data.activities || [];
+    if (currentTab === 'activities') renderActivitiesTimeline();
+  } catch (err) {
+    console.warn('Failed to load activities', err);
+  }
+}
+
+async function loadEngineTasks() {
+  try {
+    const res = await fetch(`${API}/api/v1/tasks?limit=50`);
+    if (!res.ok) return;
+    const data = await res.json();
+    engineTasksList = Array.isArray(data) ? data : (data.tasks || []);
+    
+    const countEl = document.getElementById('engineTotalTasks');
+    if (countEl) countEl.textContent = engineTasksList.length;
+
+    const tbody = document.getElementById('engineTasksTableBody');
+    if (!tbody) return;
+
+    if (engineTasksList.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="7" class="text-center py-4 text-muted">No background tasks enqueued yet.</td></tr>';
+      return;
+    }
+
+    tbody.innerHTML = engineTasksList.slice(0, 15).map(t => `
+      <tr>
+        <td class="font-mono">${(t.id || '').substring(0, 8)}...</td>
+        <td class="font-semibold text-brand">${t.task_name}</td>
+        <td><span class="badge-neutral">${t.queue || 'default'}</span></td>
+        <td>P${t.priority ?? 1}</td>
+        <td><span class="badge-status status-${(t.status || 'PENDING').toLowerCase()}">${t.status}</span></td>
+        <td class="text-muted">${t.worker_id || 'unassigned'}</td>
+        <td class="text-muted text-xs">${formatDateTime(t.created_at)}</td>
+      </tr>
+    `).join('');
+  } catch (err) {
+    console.warn('Failed to load engine tasks', err);
+  }
+}
+
+// ==========================================================================
+// RENDERING VIEWS
+// ==========================================================================
+
+function updateKPICards() {
+  const pVal = document.getElementById('kpiPipelineValue');
+  const cVal = document.getElementById('kpiClosedWonValue');
+  const wRate = document.getElementById('kpiWinRate');
+  const tLeads = document.getElementById('kpiTotalLeads');
+  const tAccs = document.getElementById('kpiTotalAccounts');
+
+  if (pVal) pVal.textContent = `$${(crmStats.total_pipeline || 0).toLocaleString()}`;
+  if (cVal) cVal.textContent = `$${(crmStats.closed_won || 0).toLocaleString()}`;
+  if (wRate) wRate.textContent = `${crmStats.win_rate_percent || 0}%`;
+  if (tLeads) tLeads.textContent = crmStats.total_leads || leadsList.length;
+  if (tAccs) tAccs.textContent = crmStats.total_accounts || accountsList.length;
+}
+
+function renderHomeView() {
+  updateKPICards();
+  initOrUpdateCharts();
+  renderHomeTopDeals();
+}
+
+function renderHomeTopDeals() {
+  const tbody = document.getElementById('homeTopDealsTableBody');
   if (!tbody) return;
 
-  let filtered = executionsList;
-  if (searchQuery) {
-    const q = searchQuery.toLowerCase();
-    filtered = filtered.filter(t =>
-      (t.id && t.id.toLowerCase().includes(q)) ||
-      (t.task_name && t.task_name.toLowerCase().includes(q)) ||
-      (t.worker_id && t.worker_id.toLowerCase().includes(q)) ||
-      (t.queue && t.queue.toLowerCase().includes(q))
-    );
-  }
+  const topDeals = [...dealsList].sort((a, b) => (b.amount || 0) - (a.amount || 0)).slice(0, 5);
 
-  // Update record count in header meta
-  const recordCountMeta = document.getElementById('recordCountMeta');
-  if (recordCountMeta) recordCountMeta.textContent = `${filtered.length} items`;
-
-  const paginationSummary = document.getElementById('paginationSummary');
-  if (paginationSummary) paginationSummary.textContent = `Showing 1-${filtered.length} of ${filtered.length} records`;
-
-  if (filtered.length === 0) {
-    tbody.innerHTML = '';
-    if (emptyState) emptyState.style.display = 'flex';
+  if (topDeals.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="8" class="text-center py-4 text-muted">No opportunities found.</td></tr>';
     return;
   }
 
-  if (emptyState) emptyState.style.display = 'none';
+  tbody.innerHTML = topDeals.map(d => `
+    <tr>
+      <td class="font-semibold text-brand cursor-pointer" onclick="openDealDetailDrawer('${d.id}')">${d.name}</td>
+      <td>${d.account_name}</td>
+      <td><span class="badge-status ${d.stage === 'Closed Won' ? 'status-closed-won' : 'status-working'}">${d.stage}</span></td>
+      <td class="font-bold">$${(d.amount || 0).toLocaleString()}</td>
+      <td><span class="kanban-card-prob">${d.probability}%</span></td>
+      <td class="text-muted">${d.close_date || ''}</td>
+      <td>${d.owner || 'Alex Chen'}</td>
+      <td>
+        <button class="slds-btn slds-btn-neutral slds-btn-sm" onclick="openDealDetailDrawer('${d.id}')">View</button>
+      </td>
+    </tr>
+  `).join('');
+}
 
-  tbody.innerHTML = filtered.map(t => {
-    const pill = getStatusPill(t.status);
-    const priorityLabel = getPriorityLabel(t.priority);
-    const duration = formatDuration(t.duration_ms, t.started_at, t.completed_at);
-    const timeFormatted = formatTimeAgo(t.created_at || t.started_at);
+function initOrUpdateCharts() {
+  const stageCanvas = document.getElementById('pipelineStageChart');
+  const donutCanvas = document.getElementById('dealDonutChart');
+
+  if (!stageCanvas || !donutCanvas) return;
+
+  const stages = [
+    'Prospecting',
+    'Qualification',
+    'Needs Analysis',
+    'Proposal/Price Quote',
+    'Negotiation',
+    'Closed Won',
+  ];
+
+  const stageValues = stages.map(st => {
+    return dealsList.filter(d => d.stage === st).reduce((sum, d) => sum + (d.amount || 0), 0);
+  });
+
+  const stageCounts = stages.map(st => {
+    return dealsList.filter(d => d.stage === st).length;
+  });
+
+  // 1. Stage Funnel Horizontal Bar Chart
+  if (pipelineChart) {
+    pipelineChart.data.datasets[0].data = stageValues;
+    pipelineChart.update();
+  } else {
+    pipelineChart = new Chart(stageCanvas, {
+      type: 'bar',
+      data: {
+        labels: ['Prospecting', 'Qual.', 'Needs Analysis', 'Proposal', 'Negotiation', 'Won'],
+        datasets: [{
+          label: 'Pipeline ($)',
+          data: stageValues,
+          backgroundColor: ['#93c5fd', '#60a5fa', '#3b82f6', '#2563eb', '#1d4ed8', '#16a34a'],
+          borderRadius: 4,
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            callbacks: {
+              label: (ctx) => `Value: $${ctx.raw.toLocaleString()}`
+            }
+          }
+        },
+        scales: {
+          y: {
+            beginAtZero: true,
+            ticks: {
+              callback: (v) => `$${(v/1000)}k`
+            }
+          }
+        }
+      }
+    });
+  }
+
+  // 2. Deal Count Donut Chart
+  if (dealDonutChart) {
+    dealDonutChart.data.datasets[0].data = stageCounts;
+    dealDonutChart.update();
+  } else {
+    dealDonutChart = new Chart(donutCanvas, {
+      type: 'doughnut',
+      data: {
+        labels: ['Prospecting', 'Qualification', 'Needs Analysis', 'Proposal', 'Negotiation', 'Won'],
+        datasets: [{
+          data: stageCounts,
+          backgroundColor: ['#93c5fd', '#60a5fa', '#3b82f6', '#2563eb', '#1d4ed8', '#16a34a'],
+          borderWidth: 2,
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: {
+            position: 'right',
+            labels: { boxWidth: 12, font: { size: 11 } }
+          }
+        }
+      }
+    });
+  }
+}
+
+// ==========================================================================
+// LEADS TABLE
+// ==========================================================================
+
+function filterLeadsByStatus(status) {
+  renderLeadsTable(status);
+}
+
+function renderLeadsTable(filterStatus = '') {
+  const tbody = document.getElementById('leadsTableBody');
+  if (!tbody) return;
+
+  let filtered = leadsList;
+  if (filterStatus) {
+    filtered = filtered.filter(l => l.status === filterStatus);
+  }
+  if (currentSearch) {
+    const q = currentSearch.toLowerCase();
+    filtered = filtered.filter(l =>
+      (l.first_name || '').toLowerCase().includes(q) ||
+      (l.last_name || '').toLowerCase().includes(q) ||
+      (l.company || '').toLowerCase().includes(q) ||
+      (l.email || '').toLowerCase().includes(q)
+    );
+  }
+
+  if (filtered.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="9" class="text-center py-4 text-muted">No matching leads found.</td></tr>';
+    return;
+  }
+
+  tbody.innerHTML = filtered.map(l => {
+    const scoreClass = l.score >= 80 ? 'score-high' : (l.score >= 65 ? 'score-mid' : 'score-low');
+    const statusClass = `status-${(l.status || 'new').toLowerCase()}`;
 
     return `
-      <tr onclick="handleRowClick('${escapeHtml(t.id)}')">
-        <td onclick="event.stopPropagation()"><input type="checkbox" /></td>
-        <td><span class="slds-status-pill ${pill.css}">${pill.text}</span></td>
-        <td class="task-name-cell">${escapeHtml(t.task_name)}</td>
-        <td><a href="javascript:void(0)" class="task-id-code" onclick="event.stopPropagation(); handleRowClick('${escapeHtml(t.id)}')">${escapeHtml(t.id.substring(0, 13))}…</a></td>
-        <td><span class="queue-tag">${escapeHtml(t.queue || 'default')}</span></td>
-        <td><span class="priority-tag ${priorityLabel.css}">${priorityLabel.text}</span></td>
-        <td><span style="font-family: var(--font-mono); font-size: 11.5px; color: var(--slds-text-muted);">${escapeHtml(t.worker_id || '—')}</span></td>
-        <td style="text-align: right;"><span class="duration-val">${duration}</span></td>
-        <td style="text-align: right;"><span class="time-val">${timeFormatted}</span></td>
+      <tr>
+        <td class="font-semibold text-brand cursor-pointer" onclick="openLeadDetailDrawer('${l.id}')">
+          ${l.first_name} ${l.last_name}
+        </td>
+        <td class="font-medium">${l.company}</td>
+        <td class="text-muted">${l.title || '—'}</td>
+        <td><span class="badge-status ${statusClass}">${l.status}</span></td>
+        <td><span class="score-badge ${scoreClass}">${l.score}</span></td>
+        <td><span class="badge-neutral">${l.lead_source}</span></td>
+        <td>${l.annual_revenue ? '$' + Number(l.annual_revenue).toLocaleString() : '—'}</td>
+        <td class="text-muted">${l.owner}</td>
+        <td>
+          <div class="slds-action-btn-group">
+            <button class="slds-btn slds-btn-neutral slds-btn-sm" onclick="convertLead('${l.id}')" title="Convert to Deal">Convert</button>
+            <button class="slds-btn slds-btn-neutral slds-btn-sm text-red" onclick="deleteLead('${l.id}')" title="Delete">✕</button>
+          </div>
+        </td>
       </tr>
     `;
   }).join('');
 }
 
-function handleRowClick(taskId) {
-  openTaskDrawer(taskId);
-  const task = executionsList.find(t => t.id === taskId);
-  if (task) {
-    updateSalesPath(task.status);
-  }
-}
-
 // ==========================================================================
-// SALESFORCE SALES PATH (CHEVRON TRACKER)
+// OPPORTUNITIES KANBAN PIPELINE
 // ==========================================================================
 
-function updateSalesPath(status) {
-  const stepScheduled = document.getElementById('pathStepScheduled');
-  const stepQueued = document.getElementById('pathStepQueued');
-  const stepRunning = document.getElementById('pathStepRunning');
-  const stepSuccess = document.getElementById('pathStepSuccess');
+const KANBAN_STAGES = [
+  'Prospecting',
+  'Qualification',
+  'Needs Analysis',
+  'Proposal/Price Quote',
+  'Negotiation',
+  'Closed Won',
+];
 
-  if (!stepScheduled) return;
+function renderKanbanBoard() {
+  KANBAN_STAGES.forEach(stage => {
+    const stageKey = stage.replace(/[^a-zA-Z]/g, '');
+    const container = document.getElementById(`cards-${stageKey}`);
+    const countEl = document.getElementById(`count-${stageKey}`);
+    const sumEl = document.getElementById(`sum-${stageKey}`);
 
-  // Reset classes
-  [stepScheduled, stepQueued, stepRunning, stepSuccess].forEach(s => {
-    s.className = 'slds-path-step';
+    if (!container) return;
+
+    const dealsInStage = dealsList.filter(d => d.stage === stage);
+    const sumAmount = dealsInStage.reduce((sum, d) => sum + (d.amount || 0), 0);
+
+    if (countEl) countEl.textContent = `${dealsInStage.length} Deals`;
+    if (sumEl) sumEl.textContent = `$${sumAmount.toLocaleString()}`;
+
+    if (dealsInStage.length === 0) {
+      container.innerHTML = '<div class="text-muted text-xs text-center py-4">No opportunities</div>';
+      return;
+    }
+
+    container.innerHTML = dealsInStage.map(d => `
+      <div class="kanban-card" onclick="openDealDetailDrawer('${d.id}')">
+        <div class="kanban-card-title">${d.name}</div>
+        <div class="kanban-card-account">${d.account_name}</div>
+        <div class="kanban-card-meta">
+          <span class="kanban-card-amount">$${Number(d.amount).toLocaleString()}</span>
+          <span class="kanban-card-prob">${d.probability}% prob</span>
+        </div>
+        <div class="kanban-card-footer">
+          <span>📅 ${d.close_date}</span>
+          <span>👤 ${d.owner}</span>
+        </div>
+      </div>
+    `).join('');
   });
-
-  if (status === 'PENDING') {
-    stepScheduled.className = 'slds-path-step step-complete';
-    stepQueued.className = 'slds-path-step step-active';
-    stepRunning.className = 'slds-path-step step-upcoming';
-    stepSuccess.className = 'slds-path-step step-upcoming';
-  } else if (status === 'RUNNING') {
-    stepScheduled.className = 'slds-path-step step-complete';
-    stepQueued.className = 'slds-path-step step-complete';
-    stepRunning.className = 'slds-path-step step-active';
-    stepSuccess.className = 'slds-path-step step-upcoming';
-  } else if (status === 'SUCCESS') {
-    stepScheduled.className = 'slds-path-step step-complete';
-    stepQueued.className = 'slds-path-step step-complete';
-    stepRunning.className = 'slds-path-step step-complete';
-    stepSuccess.className = 'slds-path-step step-complete';
-  } else if (status === 'FAILED' || status === 'DEAD_LETTERED') {
-    stepScheduled.className = 'slds-path-step step-complete';
-    stepQueued.className = 'slds-path-step step-complete';
-    stepRunning.className = 'slds-path-step step-failed';
-    stepSuccess.className = 'slds-path-step step-failed';
-  } else {
-    stepScheduled.className = 'slds-path-step step-complete';
-    stepQueued.className = 'slds-path-step step-complete';
-    stepRunning.className = 'slds-path-step step-active';
-    stepSuccess.className = 'slds-path-step step-upcoming';
-  }
 }
 
 // ==========================================================================
-// STATS & EINSTEIN AI COPILOT
+// ACCOUNTS & CONTACTS TABLES
 // ==========================================================================
 
-async function loadStats() {
-  try {
-    const res = await fetch(`${API}/api/v1/tasks/stats`);
-    if (res.ok) {
-      const stats = await res.json();
-      const completed = stats.SUCCESS || 0;
-      const running = stats.RUNNING || 0;
-      const failed = stats.FAILED || 0;
-      const dlq = stats.DEAD_LETTERED || 0;
-      const pending = stats.PENDING || 0;
-      const total = completed + running + failed + dlq + pending;
-      const tps = (stats.throughput_per_sec || 0.0);
+function renderAccountsTable() {
+  const tbody = document.getElementById('accountsTableBody');
+  if (!tbody) return;
 
-      // Dashboards & Reports Tab KPIs
-      const dbKpiTotal = document.getElementById('dbKpiTotal');
-      if (dbKpiTotal) dbKpiTotal.textContent = total;
-
-      const rate = total > 0 ? Math.round((completed / (completed + failed + dlq || 1)) * 100) : 100;
-      const dbKpiRate = document.getElementById('dbKpiRate');
-      if (dbKpiRate) dbKpiRate.textContent = `${rate}%`;
-
-      const dbKpiTps = document.getElementById('dbKpiTps');
-      if (dbKpiTps) dbKpiTps.textContent = tps.toFixed(1);
-
-      const dbKpiLatency = document.getElementById('dbKpiLatency');
-      if (dbKpiLatency && stats.avg_latency_ms !== undefined) {
-        dbKpiLatency.textContent = `${stats.avg_latency_ms}ms`;
-      }
-
-      // Einstein Task Intelligence Widget
-      const healthScore = Math.max(88, 100 - (failed * 3 + dlq * 5));
-      const copilotHealthScore = document.getElementById('copilotHealthScore');
-      if (copilotHealthScore) copilotHealthScore.textContent = `${healthScore.toFixed(1)}%`;
-
-      const copilotHealthBar = document.getElementById('copilotHealthBar');
-      if (copilotHealthBar) copilotHealthBar.style.width = `${healthScore}%`;
-
-      const copilotTps = document.getElementById('copilotTps');
-      if (copilotTps) copilotTps.textContent = `${tps.toFixed(1)} tps`;
-
-      // DLQ Tab Badge
-      const tabCountDLQ = document.getElementById('tabCountDLQ');
-      if (tabCountDLQ) tabCountDLQ.textContent = dlq;
-
-      // Update Charts
-      updateDonutChart({ SUCCESS: completed, RUNNING: running, FAILED: failed, DEAD_LETTERED: dlq });
-      recordThroughputSample(tps);
-    }
-  } catch (err) {
-    console.warn('Stats poll error', err);
+  if (accountsList.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="8" class="text-center py-4 text-muted">No accounts registered yet.</td></tr>';
+    return;
   }
+
+  tbody.innerHTML = accountsList.map(a => `
+    <tr>
+      <td class="font-semibold text-brand">${a.name}</td>
+      <td><span class="badge-neutral">${a.industry}</span></td>
+      <td><span class="badge-status status-new">${a.tier}</span></td>
+      <td class="font-bold">$${Number(a.annual_revenue || 0).toLocaleString()}</td>
+      <td>${a.employees} employees</td>
+      <td>${a.billing_city ? `${a.billing_city}, ${a.billing_country || ''}` : '—'}</td>
+      <td><a href="${a.website || '#'}" target="_blank" class="text-brand">${a.website || '—'}</a></td>
+      <td class="text-muted">${a.phone || '—'}</td>
+    </tr>
+  `).join('');
 }
 
-async function loadQueues() {
-  try {
-    const res = await fetch(`${API}/api/v1/metrics`);
-    if (res.ok) {
-      const data = await res.json();
-      const queues = data.queues || { default: { critical: 0, high: 0, normal: 0, low: 0 } };
-      const container = document.getElementById('queuesContainer');
-      if (!container) return;
+function renderContactsTable() {
+  const tbody = document.getElementById('contactsTableBody');
+  if (!tbody) return;
 
-      container.innerHTML = Object.entries(queues).map(([name, prios]) => {
-        const total = Object.values(prios).reduce((a, b) => a + b, 0);
-        return `
-          <div class="queue-card">
-            <div class="queue-card-top">
-              <span class="queue-card-name">${escapeHtml(name)}</span>
-              <span class="slds-status-pill status-success">ACTIVE</span>
-            </div>
-            <div style="font-size: 11.5px; color: var(--slds-text-muted);">Strict Priority Sub-queues:</div>
-            <div class="queue-priority-breakdown">
-              <div class="qp-item">
-                <span class="qp-label text-rose">CRITICAL</span>
-                <span class="qp-val">${prios.critical || 0}</span>
-              </div>
-              <div class="qp-item">
-                <span class="qp-label" style="color: #b86200;">HIGH</span>
-                <span class="qp-val">${prios.high || 0}</span>
-              </div>
-              <div class="qp-item">
-                <span class="qp-label">NORMAL</span>
-                <span class="qp-val">${prios.normal || 0}</span>
-              </div>
-              <div class="qp-item">
-                <span class="qp-label">LOW</span>
-                <span class="qp-val">${prios.low || 0}</span>
-              </div>
-            </div>
-            <div style="display: flex; justify-content: space-between; align-items: center; font-size: 12px; color: var(--slds-text-muted); border-top: 1px solid var(--slds-border); padding-top: 10px;">
-              <span>Total Backlog: <b style="color: var(--slds-text-primary); font-family: var(--font-mono);">${total}</b></span>
-              <button class="slds-btn slds-btn-neutral slds-btn-xs" onclick="filterByQueue('${escapeHtml(name)}')">View Records →</button>
-            </div>
-          </div>
-        `;
-      }).join('');
-    }
-  } catch (err) {
-    console.warn('Queue poll error', err);
+  if (contactsList.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="7" class="text-center py-4 text-muted">No contacts registered yet.</td></tr>';
+    return;
   }
-}
 
-async function loadWorkers() {
-  try {
-    const res = await fetch(`${API}/api/v1/workers`);
-    if (res.ok) {
-      const workers = await res.json();
-      const tbody = document.getElementById('workersTableBody');
-      if (!tbody) return;
-
-      if (workers.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="7" style="text-align: center; color: var(--slds-text-muted); padding: 32px;">No active worker processes detected in fleet.</td></tr>`;
-        return;
-      }
-
-      tbody.innerHTML = workers.map(w => `
-        <tr>
-          <td><span class="slds-status-pill ${w.status === 'ONLINE' ? 'status-success' : 'status-failed'}">${w.status}</span></td>
-          <td><code style="font-family: var(--font-mono); color: #0176d3; font-weight: 600;">${escapeHtml(w.id)}</code></td>
-          <td>${escapeHtml(w.hostname || 'localhost')}</td>
-          <td><span style="font-family: var(--font-mono);">${w.pid || 1}</span></td>
-          <td style="text-align: right; font-family: var(--font-mono); font-weight: 600;">${w.tasks_processed || 0}</td>
-          <td style="text-align: right; font-family: var(--font-mono); color: ${w.tasks_failed > 0 ? 'var(--slds-error)' : 'inherit'};">${w.tasks_failed || 0}</td>
-          <td style="text-align: right; font-size: 11.5px; color: var(--slds-text-muted);">${formatTimeAgo(w.last_heartbeat)}</td>
-        </tr>
-      `).join('');
-    }
-  } catch (err) {
-    console.warn('Worker poll error', err);
-  }
-}
-
-async function loadDLQ() {
-  try {
-    const res = await fetch(`${API}/api/v1/dlq?limit=50`);
-    if (res.ok) {
-      const entries = await res.json();
-      const tbody = document.getElementById('dlqTableBody');
-      const emptyState = document.getElementById('dlqEmptyState');
-      const tabBadge = document.getElementById('tabCountDLQ');
-
-      if (tabBadge) tabBadge.textContent = entries.length;
-      if (!tbody) return;
-
-      if (entries.length === 0) {
-        tbody.innerHTML = '';
-        if (emptyState) emptyState.style.display = 'flex';
-        return;
-      }
-
-      if (emptyState) emptyState.style.display = 'none';
-
-      tbody.innerHTML = entries.map(e => `
-        <tr>
-          <td class="task-name-cell">${escapeHtml(e.task_name)}</td>
-          <td><span style="color: var(--slds-error); font-size: 12px; font-weight: 500;">${escapeHtml(e.error_message || 'Permanent failure')}</span></td>
-          <td style="text-align: center; font-family: var(--font-mono);">${e.retry_count}</td>
-          <td><span class="queue-tag">${escapeHtml(e.original_queue)}</span></td>
-          <td><span class="time-val">${formatTimeAgo(e.dead_lettered_at)}</span></td>
-          <td style="text-align: right;">
-            <button class="slds-btn slds-btn-neutral slds-btn-xs" onclick="replayDLQEntry('${escapeHtml(e.id)}')">↺ Replay</button>
-            <button class="slds-btn slds-btn-xs" style="color: var(--slds-error);" onclick="deleteDLQEntry('${escapeHtml(e.id)}')">Delete</button>
-          </td>
-        </tr>
-      `).join('');
-    }
-  } catch (err) {
-    console.warn('DLQ poll error', err);
-  }
-}
-
-async function loadMetrics() {
-  try {
-    const res = await fetch(`${API}/api/v1/metrics`);
-    if (res.ok) {
-      const data = await res.json();
-      if (data.redis) {
-        const mode = data.redis.mode || (data.redis.connected ? 'Redis Distributed Broker' : 'InMemoryBroker (Standalone)');
-        const brokerEl = document.getElementById('cfgBroker');
-        if (brokerEl) brokerEl.textContent = mode;
-      }
-    }
-  } catch (err) {
-    console.warn('Metrics poll error', err);
-  }
+  tbody.innerHTML = contactsList.map(c => `
+    <tr>
+      <td class="font-semibold text-brand">${c.first_name} ${c.last_name}</td>
+      <td class="font-medium">${c.account_name || '—'}</td>
+      <td>${c.title || '—'}</td>
+      <td><span class="badge-neutral">${c.department || 'General'}</span></td>
+      <td><a href="mailto:${c.email}" class="text-brand">${c.email}</a></td>
+      <td class="text-muted">${c.phone || '—'}</td>
+      <td>${c.is_primary ? '<span class="badge-status status-qualified">Primary</span>' : '—'}</td>
+    </tr>
+  `).join('');
 }
 
 // ==========================================================================
-// SALESFORCE NAVIGATION (TAB SWITCHING)
+// ACTIVITY TIMELINE
 // ==========================================================================
 
-function switchTab(tabName) {
-  currentTab = tabName;
-
-  // Update nav tabs
-  document.querySelectorAll('.slds-nav-tab').forEach(b => {
-    b.classList.toggle('active', b.dataset.tab === tabName);
-  });
-
-  // Update panels
-  document.querySelectorAll('.slds-tab-panel').forEach(p => p.classList.remove('active'));
-  const target = document.getElementById(`tab${tabName.charAt(0).toUpperCase() + tabName.slice(1)}`);
-  if (target) target.classList.add('active');
-
-  // Trigger relevant loader
-  if (tabName === 'executions') loadExecutions();
-  if (tabName === 'queues') loadQueues();
-  if (tabName === 'workers') loadWorkers();
-  if (tabName === 'dlq') loadDLQ();
-  if (tabName === 'dashboards') loadStats();
-  if (tabName === 'settings') loadMetrics();
-}
-
-function setStatusFilter(status) {
-  currentStatusFilter = status;
-  loadExecutions();
-}
-
-function setQueueFilter(queue) {
-  currentQueueFilter = queue;
-  loadExecutions();
-}
-
-function filterByQueue(queueName) {
-  switchTab('executions');
-  const sel = document.getElementById('queueFilterSelect');
-  if (sel) sel.value = queueName;
-  currentQueueFilter = queueName;
-  loadExecutions();
-}
-
-function handleSearch(val) {
-  searchQuery = val.trim();
-  renderExecutionsTable();
-}
-
-function manualRefresh() {
-  loadAllData();
-  showToast('Refreshed cluster records', 'info');
-}
-
-// ==========================================================================
-// SALESFORCE LIGHTNING SLIDE-OVER RECORD DRAWER
-// ==========================================================================
-
-async function openTaskDrawer(taskId, openAnimation = true) {
-  currentDrawerTaskId = taskId;
-  const drawer = document.getElementById('taskDrawer');
-  const backdrop = document.getElementById('drawerBackdrop');
-
-  if (openAnimation) {
-    if (drawer) drawer.classList.add('open');
-    if (backdrop) backdrop.classList.add('open');
-  }
-
-  const idEl = document.getElementById('drawerTaskId');
-  const nameEl = document.getElementById('drawerTaskName');
-  if (idEl) idEl.textContent = taskId;
-  if (nameEl) nameEl.textContent = 'Loading record details...';
-
-  try {
-    const res = await fetch(`${API}/api/v1/tasks/${taskId}`);
-    if (!res.ok) throw new Error('Task record not found');
-    const task = await res.json();
-    currentDrawerTask = task;
-
-    if (nameEl) nameEl.textContent = task.task_name;
-    const badge = document.getElementById('drawerStatusBadge');
-    if (badge) {
-      const pill = getStatusPill(task.status);
-      badge.className = `slds-drawer-badge ${pill.css}`;
-      badge.textContent = task.status;
-    }
-
-    renderTimelineStepper(task);
-
-    // Input payload
-    let parsedArgs = [];
-    let parsedKwargs = {};
-    try { parsedArgs = JSON.parse(task.args_json || '[]'); } catch (e) {}
-    try { parsedKwargs = JSON.parse(task.kwargs_json || '{}'); } catch (e) {}
-    const inEl = document.getElementById('drawerInputJson');
-    if (inEl) inEl.textContent = JSON.stringify({ args: parsedArgs, kwargs: parsedKwargs }, null, 2);
-
-    // Output payload
-    let parsedResult = null;
-    try { parsedResult = JSON.parse(task.result_json); } catch (e) { parsedResult = task.result_json; }
-    const outEl = document.getElementById('drawerOutputJson');
-    if (outEl) outEl.textContent = parsedResult !== null ? JSON.stringify(parsedResult, null, 2) : '(No result yet or pending)';
-
-    // Error tab
-    const errTab = document.getElementById('drawerTabError');
-    const errMsg = document.getElementById('drawerErrorMessage');
-    const errTb = document.getElementById('drawerErrorTraceback');
-    if (task.error_message || task.error_traceback) {
-      if (errTab) errTab.style.display = 'inline-block';
-      if (errMsg) errMsg.textContent = task.error_message || 'Task failed';
-      if (errTb) errTb.textContent = task.error_traceback || 'No traceback captured';
-    } else {
-      if (errTab) errTab.style.display = 'none';
-    }
-
-    // Metadata tab
-    const qEl = document.getElementById('dmQueue');
-    if (qEl) qEl.textContent = task.queue || 'default';
-    const prioEl = document.getElementById('dmPriority');
-    if (prioEl) prioEl.textContent = `${getPriorityLabel(task.priority).text} (${task.priority})`;
-    const wEl = document.getElementById('dmWorker');
-    if (wEl) wEl.textContent = task.worker_id || 'Pending assignment';
-    const retEl = document.getElementById('dmRetries');
-    if (retEl) retEl.textContent = `${task.retry_count || 0} / ${task.max_retries || 3}`;
-    const toEl = document.getElementById('dmTimeout');
-    if (toEl) toEl.textContent = `${task.timeout || 300}s`;
-    const cAt = document.getElementById('dmCreatedAt');
-    if (cAt) cAt.textContent = task.created_at || '—';
-    const compAt = document.getElementById('dmCompletedAt');
-    if (compAt) compAt.textContent = task.completed_at || 'In-flight';
-
-  } catch (err) {
-    if (nameEl) nameEl.textContent = 'Record Details Unavailable';
-  }
-}
-
-function renderTimelineStepper(task) {
-  const container = document.getElementById('drawerTimeline');
+function renderActivitiesTimeline() {
+  const container = document.getElementById('activityTimelineContainer');
   if (!container) return;
 
-  const isCompleted = task.status === 'SUCCESS';
-  const isFailed = task.status === 'FAILED';
-  const isRunning = task.status === 'RUNNING';
+  if (activitiesList.length === 0) {
+    container.innerHTML = '<div class="text-muted text-center py-6">No recorded activity history. Log a call or task above.</div>';
+    return;
+  }
 
-  container.innerHTML = `
-    <div class="timeline-step">
-      <div class="t-icon done"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"></polyline></svg></div>
-      <div class="t-details">
-        <div class="t-title">Task Scheduled & Partitioned</div>
-        <div class="t-time">${task.created_at ? new Date(task.created_at).toLocaleTimeString() : '—'}</div>
-        <div class="t-desc">Routed into queue partition <code>${escapeHtml(task.queue || 'default')}</code></div>
-      </div>
-    </div>
+  container.innerHTML = activitiesList.map(a => {
+    const iconClass = `icon-${(a.type || 'task').toLowerCase()}`;
+    const iconEmoji = a.type === 'Call' ? '📞' : (a.type === 'Meeting' ? '🤝' : (a.type === 'Email' ? '✉️' : '📋'));
 
-    <div class="timeline-step">
-      <div class="t-icon ${isRunning ? 'active' : (isCompleted || isFailed ? 'done' : '')}">
-        ${isRunning ? '<svg width="9" height="9" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>' : (isCompleted || isFailed ? '<svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"></polyline></svg>' : '<span class="dot-pending"></span>')}
+    return `
+      <div class="timeline-item">
+        <div class="timeline-icon ${iconClass}">${iconEmoji}</div>
+        <div class="timeline-content">
+          <div class="d-flex justify-between align-center">
+            <div class="timeline-subject">${a.subject}</div>
+            <button class="slds-btn slds-btn-neutral slds-btn-sm" onclick="toggleActivityStatus('${a.id}')">
+              ${a.status === 'Completed' ? '✓ Completed' : 'Mark Done'}
+            </button>
+          </div>
+          <div class="timeline-meta">
+            ${a.type} • Related to <strong>${a.entity_name || 'Account'}</strong> • Due: ${a.due_date || 'None'}
+          </div>
+          ${a.description ? `<div class="timeline-desc">${a.description}</div>` : ''}
+        </div>
       </div>
-      <div class="t-details">
-        <div class="t-title">Worker Process Acquired</div>
-        <div class="t-time">${task.started_at ? new Date(task.started_at).toLocaleTimeString() : (isRunning ? 'Executing' : 'Queued')}</div>
-        <div class="t-desc">Claimed by worker <code>${escapeHtml(task.worker_id || 'worker-pool')}</code> (late ACK enabled)</div>
-      </div>
-    </div>
-
-    <div class="timeline-step">
-      <div class="t-icon ${isCompleted ? 'done' : (isFailed ? 'error' : '')}">
-        ${isCompleted ? '<svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"></polyline></svg>' : (isFailed ? '<svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>' : '<span class="dot-pending"></span>')}
-      </div>
-      <div class="t-details">
-        <div class="t-title">${isCompleted ? 'Execution Succeeded' : (isFailed ? 'Execution Failed' : 'Pending Completion')}</div>
-        <div class="t-time">${task.completed_at ? new Date(task.completed_at).toLocaleTimeString() : '—'}</div>
-        <div class="t-desc">${isCompleted ? 'Result committed and ACK sent' : (isFailed ? (task.error_message || 'Task failed') : 'Executing asynchronous workload')}</div>
-      </div>
-    </div>
-  `;
+    `;
+  }).join('');
 }
 
-function closeTaskDrawer() {
-  const drawer = document.getElementById('taskDrawer');
-  const backdrop = document.getElementById('drawerBackdrop');
-  if (drawer) drawer.classList.remove('open');
-  if (backdrop) backdrop.classList.remove('open');
-  currentDrawerTaskId = null;
-  currentDrawerTask = null;
-}
-
-function switchDrawerTab(tabName) {
-  document.querySelectorAll('.drawer-tab-bar .d-tab').forEach(b => {
-    b.classList.toggle('active', b.dataset.dtab === tabName);
-  });
-  document.querySelectorAll('.drawer-body .drawer-tab-content').forEach(c => c.classList.remove('active'));
-  const target = document.getElementById(`dtab${tabName.charAt(0).toUpperCase() + tabName.slice(1)}`);
-  if (target) target.classList.add('active');
-}
-
-function copyCurrentTaskId() {
-  if (currentDrawerTaskId) {
-    navigator.clipboard.writeText(currentDrawerTaskId);
-    showToast('Record ID copied to clipboard', 'info');
+async function toggleActivityStatus(actId) {
+  try {
+    const res = await fetch(`${API}/api/v1/crm/activities/${actId}/toggle`, { method: 'PUT' });
+    if (res.ok) {
+      showToast('Activity status updated', 'success');
+      loadActivities();
+    }
+  } catch (err) {
+    showToast('Failed to update activity', 'error');
   }
 }
 
-function copyJsonPayload(elementId) {
-  const text = document.getElementById(elementId)?.textContent;
-  if (text) {
-    navigator.clipboard.writeText(text);
-    showToast('JSON payload copied', 'info');
+// ==========================================================================
+// RECORD DETAIL DRAWER (OPPORTUNITY & LEAD)
+// ==========================================================================
+
+function openDealDetailDrawer(dealId) {
+  const deal = dealsList.find(d => d.id === dealId);
+  if (!deal) return;
+
+  const overline = document.getElementById('drawerOverline');
+  const title = document.getElementById('drawerTitle');
+  const body = document.getElementById('drawerBody');
+  const footer = document.getElementById('drawerFooter');
+  const path = document.getElementById('drawerSalesPath');
+
+  if (overline) overline.textContent = `Opportunity • ${deal.account_name}`;
+  if (title) title.textContent = deal.name;
+
+  // Highlight sales path
+  if (path) {
+    path.style.display = 'flex';
+    const steps = path.querySelectorAll('.path-step');
+    let past = true;
+    steps.forEach(s => {
+      const stepName = s.getAttribute('data-step');
+      s.className = 'path-step';
+      if (stepName === deal.stage) {
+        s.classList.add('active');
+        past = false;
+      } else if (past) {
+        s.classList.add('completed');
+      }
+      s.onclick = () => advanceDealStage(deal.id, stepName);
+    });
+  }
+
+  if (body) {
+    body.innerHTML = `
+      <div class="drawer-field-grid">
+        <div class="drawer-field">
+          <label>Deal Amount</label>
+          <div class="drawer-val-bold">$${Number(deal.amount).toLocaleString()}</div>
+        </div>
+        <div class="drawer-field">
+          <label>Win Probability</label>
+          <div class="drawer-val">${deal.probability}%</div>
+        </div>
+        <div class="drawer-field">
+          <label>Target Close Date</label>
+          <div class="drawer-val">${deal.close_date}</div>
+        </div>
+        <div class="drawer-field">
+          <label>Opportunity Owner</label>
+          <div class="drawer-val">${deal.owner}</div>
+        </div>
+        <div class="drawer-field">
+          <label>Deal Type</label>
+          <div class="drawer-val">${deal.deal_type}</div>
+        </div>
+        <div class="drawer-field">
+          <label>Next Step</label>
+          <div class="drawer-val text-brand">${deal.next_step || 'None assigned'}</div>
+        </div>
+      </div>
+      <div class="mt-4">
+        <h4 class="font-bold text-sm mb-2">Stage Progression</h4>
+        <p class="text-xs text-muted">Click any chevron stage above to advance or update this opportunity's status in the live pipeline.</p>
+      </div>
+    `;
+  }
+
+  if (footer) {
+    footer.innerHTML = `
+      <button class="slds-btn slds-btn-neutral" onclick="closeDetailDrawer()">Close</button>
+      <button class="slds-btn slds-btn-brand text-red" onclick="deleteDeal('${deal.id}')">Delete Opportunity</button>
+    `;
+  }
+
+  document.getElementById('detailDrawerBackdrop')?.classList.add('open');
+  document.getElementById('recordDrawer')?.classList.add('open');
+}
+
+function openLeadDetailDrawer(leadId) {
+  const lead = leadsList.find(l => l.id === leadId);
+  if (!lead) return;
+
+  const overline = document.getElementById('drawerOverline');
+  const title = document.getElementById('drawerTitle');
+  const body = document.getElementById('drawerBody');
+  const footer = document.getElementById('drawerFooter');
+  const path = document.getElementById('drawerSalesPath');
+
+  if (overline) overline.textContent = `Lead Profile • ${lead.company}`;
+  if (title) title.textContent = `${lead.first_name} ${lead.last_name}`;
+  if (path) path.style.display = 'none';
+
+  if (body) {
+    body.innerHTML = `
+      <div class="drawer-field-grid">
+        <div class="drawer-field">
+          <label>Company</label>
+          <div class="drawer-val-bold">${lead.company}</div>
+        </div>
+        <div class="drawer-field">
+          <label>Lead Score</label>
+          <div class="drawer-val"><span class="score-badge score-high">${lead.score}</span></div>
+        </div>
+        <div class="drawer-field">
+          <label>Job Title</label>
+          <div class="drawer-val">${lead.title || '—'}</div>
+        </div>
+        <div class="drawer-field">
+          <label>Email</label>
+          <div class="drawer-val"><a href="mailto:${lead.email}" class="text-brand">${lead.email}</a></div>
+        </div>
+        <div class="drawer-field">
+          <label>Phone</label>
+          <div class="drawer-val">${lead.phone || '—'}</div>
+        </div>
+        <div class="drawer-field">
+          <label>Lead Source</label>
+          <div class="drawer-val">${lead.lead_source}</div>
+        </div>
+      </div>
+      <div class="mt-4">
+        <label class="font-bold text-xs">Discovery Notes</label>
+        <div class="timeline-desc mt-1">${lead.notes || 'No notes added.'}</div>
+      </div>
+    `;
+  }
+
+  if (footer) {
+    footer.innerHTML = `
+      <button class="slds-btn slds-btn-neutral" onclick="closeDetailDrawer()">Close</button>
+      <button class="slds-btn slds-btn-brand" onclick="convertLead('${lead.id}')">Convert to Opportunity</button>
+    `;
+  }
+
+  document.getElementById('detailDrawerBackdrop')?.classList.add('open');
+  document.getElementById('recordDrawer')?.classList.add('open');
+}
+
+function closeDetailDrawer() {
+  document.getElementById('detailDrawerBackdrop')?.classList.remove('open');
+  document.getElementById('recordDrawer')?.classList.remove('open');
+}
+
+async function advanceDealStage(dealId, newStage) {
+  const probMap = {
+    'Prospecting': 20,
+    'Qualification': 40,
+    'Needs Analysis': 50,
+    'Proposal/Price Quote': 75,
+    'Negotiation': 90,
+    'Closed Won': 100,
+  };
+  try {
+    const res = await fetch(`${API}/api/v1/crm/deals/${dealId}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ stage: newStage, probability: probMap[newStage] || 50 }),
+    });
+    if (res.ok) {
+      showToast(`Opportunity advanced to ${newStage}`, 'success');
+      await loadDeals();
+      await loadCRMStats();
+      openDealDetailDrawer(dealId);
+    }
+  } catch (err) {
+    showToast('Failed to update deal stage', 'error');
   }
 }
 
-async function replayCurrentDrawerTask() {
-  if (!currentDrawerTask) return;
+// ==========================================================================
+// ACTIONS & MODAL HANDLERS
+// ==========================================================================
+
+function openModal(modalId) {
+  document.getElementById(modalId)?.classList.add('open');
+}
+
+function closeModal(modalId) {
+  document.getElementById(modalId)?.classList.remove('open');
+}
+
+function openNewLeadModal() { openModal('modalNewLead'); }
+function openNewDealModal() { openModal('modalNewDeal'); }
+function openNewAccountModal() { openModal('modalNewAccount'); }
+function openNewContactModal() { openModal('modalNewContact'); }
+function openLogActivityModal() { openModal('modalLogActivity'); }
+function openAutomationModal() { openModal('modalAutomation'); }
+function openStartTaskModal() { openModal('modalStartTask'); }
+
+function updateDealProbabilityPreset(stage) {
+  const probMap = {
+    'Prospecting': 20,
+    'Qualification': 40,
+    'Needs Analysis': 50,
+    'Proposal/Price Quote': 75,
+    'Negotiation': 90,
+    'Closed Won': 100,
+  };
+  const dealProb = probMap[stage] || 20;
+}
+
+async function handleCreateLead(e) {
+  e.preventDefault();
+  const payload = {
+    first_name: document.getElementById('leadFirstName').value,
+    last_name: document.getElementById('leadLastName').value,
+    company: document.getElementById('leadCompany').value,
+    title: document.getElementById('leadTitle').value,
+    email: document.getElementById('leadEmail').value,
+    phone: document.getElementById('leadPhone').value,
+    status: document.getElementById('leadStatus').value,
+    lead_source: document.getElementById('leadSource').value,
+    annual_revenue: document.getElementById('leadRevenue').value ? parseInt(document.getElementById('leadRevenue').value) : null,
+    score: parseInt(document.getElementById('leadScore').value || '70'),
+    notes: document.getElementById('leadNotes').value,
+  };
+
+  try {
+    const res = await fetch(`${API}/api/v1/crm/leads`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    if (res.ok) {
+      showToast('Lead created successfully', 'success');
+      closeModal('modalNewLead');
+      document.getElementById('formNewLead').reset();
+      await loadLeads();
+      await loadCRMStats();
+    }
+  } catch (err) {
+    showToast('Failed to create lead', 'error');
+  }
+}
+
+async function handleCreateDeal(e) {
+  e.preventDefault();
+  const stage = document.getElementById('dealStage').value;
+  const probMap = {
+    'Prospecting': 20,
+    'Qualification': 40,
+    'Needs Analysis': 50,
+    'Proposal/Price Quote': 75,
+    'Negotiation': 90,
+    'Closed Won': 100,
+  };
+
+  const payload = {
+    name: document.getElementById('dealName').value,
+    account_name: document.getElementById('dealAccountName').value,
+    stage: stage,
+    amount: parseInt(document.getElementById('dealAmount').value),
+    probability: probMap[stage] || 50,
+    close_date: document.getElementById('dealCloseDate').value,
+    deal_type: document.getElementById('dealType').value,
+    owner: document.getElementById('dealOwner').value,
+    next_step: document.getElementById('dealNextStep').value,
+  };
+
+  try {
+    const res = await fetch(`${API}/api/v1/crm/deals`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    if (res.ok) {
+      showToast('Opportunity created', 'success');
+      closeModal('modalNewDeal');
+      document.getElementById('formNewDeal').reset();
+      await loadDeals();
+      await loadCRMStats();
+    }
+  } catch (err) {
+    showToast('Failed to create opportunity', 'error');
+  }
+}
+
+async function handleCreateAccount(e) {
+  e.preventDefault();
+  const payload = {
+    name: document.getElementById('accName').value,
+    industry: document.getElementById('accIndustry').value,
+    tier: document.getElementById('accTier').value,
+    annual_revenue: parseInt(document.getElementById('accRevenue').value || '1000000'),
+    employees: parseInt(document.getElementById('accEmployees').value || '50'),
+    billing_city: document.getElementById('accCity').value,
+    website: document.getElementById('accWebsite').value,
+  };
+
+  try {
+    const res = await fetch(`${API}/api/v1/crm/accounts`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    if (res.ok) {
+      showToast('Corporate account saved', 'success');
+      closeModal('modalNewAccount');
+      document.getElementById('formNewAccount').reset();
+      await loadAccounts();
+      await loadCRMStats();
+    }
+  } catch (err) {
+    showToast('Failed to save account', 'error');
+  }
+}
+
+async function handleCreateContact(e) {
+  e.preventDefault();
+  const payload = {
+    first_name: document.getElementById('cntFirstName').value,
+    last_name: document.getElementById('cntLastName').value,
+    account_name: document.getElementById('cntAccountName').value,
+    title: document.getElementById('cntTitle').value,
+    email: document.getElementById('cntEmail').value,
+    phone: document.getElementById('cntPhone').value,
+  };
+
+  try {
+    const res = await fetch(`${API}/api/v1/crm/contacts`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    if (res.ok) {
+      showToast('Contact created', 'success');
+      closeModal('modalNewContact');
+      document.getElementById('formNewContact').reset();
+      await loadContacts();
+    }
+  } catch (err) {
+    showToast('Failed to create contact', 'error');
+  }
+}
+
+async function handleCreateActivity(e) {
+  e.preventDefault();
+  const payload = {
+    type: document.getElementById('actType').value,
+    entity_type: 'general',
+    entity_id: 'gen-001',
+    entity_name: document.getElementById('actEntityName').value,
+    subject: document.getElementById('actSubject').value,
+    due_date: document.getElementById('actDueDate').value,
+    description: document.getElementById('actDescription').value,
+  };
+
+  try {
+    const res = await fetch(`${API}/api/v1/crm/activities`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    if (res.ok) {
+      showToast('Activity logged', 'success');
+      closeModal('modalLogActivity');
+      document.getElementById('formLogActivity').reset();
+      await loadActivities();
+    }
+  } catch (err) {
+    showToast('Failed to log activity', 'error');
+  }
+}
+
+async function convertLead(leadId) {
+  try {
+    const res = await fetch(`${API}/api/v1/crm/leads/${leadId}/convert`, { method: 'POST' });
+    if (res.ok) {
+      const data = await res.json();
+      showToast(`Lead converted to Opportunity: ${data.deal.name}`, 'success');
+      closeDetailDrawer();
+      await loadLeads();
+      await loadDeals();
+      await loadCRMStats();
+      switchTab('deals');
+    }
+  } catch (err) {
+    showToast('Failed to convert lead', 'error');
+  }
+}
+
+async function deleteLead(leadId) {
+  if (!confirm('Are you sure you want to remove this lead?')) return;
+  try {
+    const res = await fetch(`${API}/api/v1/crm/leads/${leadId}`, { method: 'DELETE' });
+    if (res.ok) {
+      showToast('Lead deleted', 'success');
+      closeDetailDrawer();
+      await loadLeads();
+      await loadCRMStats();
+    }
+  } catch (err) {
+    showToast('Failed to delete lead', 'error');
+  }
+}
+
+async function deleteDeal(dealId) {
+  if (!confirm('Are you sure you want to delete this opportunity?')) return;
+  try {
+    const res = await fetch(`${API}/api/v1/crm/deals/${dealId}`, { method: 'DELETE' });
+    if (res.ok) {
+      showToast('Opportunity removed', 'success');
+      closeDetailDrawer();
+      await loadDeals();
+      await loadCRMStats();
+    }
+  } catch (err) {
+    showToast('Failed to delete deal', 'error');
+  }
+}
+
+async function triggerAutomationAction(actionName) {
+  try {
+    const res = await fetch(`${API}/api/v1/crm/automate`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: actionName }),
+    });
+    if (res.ok) {
+      const data = await res.json();
+      showToast(`CelerLite Job Queued: ${data.task_name} (ID: ${data.task_id.substring(0,8)})`, 'success');
+      closeModal('modalAutomation');
+      await loadEngineTasks();
+    }
+  } catch (err) {
+    showToast('Failed to trigger background automation', 'error');
+  }
+}
+
+async function handleStartTask(e) {
+  e.preventDefault();
+  const payload = {
+    task_name: document.getElementById('modalTaskName').value,
+    queue: document.getElementById('modalTaskQueue').value,
+    priority: parseInt(document.getElementById('modalTaskPriority').value),
+    args: ['manual_trigger'],
+  };
+
   try {
     const res = await fetch(`${API}/api/v1/tasks/submit`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        task_name: currentDrawerTask.task_name,
-        args: JSON.parse(currentDrawerTask.args_json || '[]'),
-        kwargs: JSON.parse(currentDrawerTask.kwargs_json || '{}'),
-        queue: currentDrawerTask.queue,
-        priority: currentDrawerTask.priority,
-      }),
+      body: JSON.stringify(payload),
     });
     if (res.ok) {
       const data = await res.json();
-      showToast(`Task re-executed with Record ID: ${data.task_id.substring(0, 8)}…`, 'success');
-      closeTaskDrawer();
-      loadExecutions();
+      showToast(`Task enqueued: ${data.task_id.substring(0,8)}`, 'success');
+      closeModal('modalStartTask');
+      await loadEngineTasks();
     }
   } catch (err) {
-    showToast('Failed to replay task', 'error');
+    showToast('Failed to submit task', 'error');
   }
 }
 
-async function revokeCurrentDrawerTask() {
-  if (!currentDrawerTaskId) return;
-  try {
-    const res = await fetch(`${API}/api/v1/tasks/${currentDrawerTaskId}/revoke`, { method: 'POST' });
-    if (res.ok) {
-      showToast(`Task ${currentDrawerTaskId.substring(0, 8)}… revoked`, 'info');
-      closeTaskDrawer();
-      loadExecutions();
-    }
-  } catch (err) {
-    showToast('Failed to revoke task', 'error');
+function handleGlobalSearch(val) {
+  currentSearch = val;
+  if (currentTab === 'leads') {
+    renderLeadsTable();
+  } else if (currentTab === 'deals') {
+    renderKanbanBoard();
   }
 }
 
 // ==========================================================================
-// SALESFORCE LIGHTNING "NEW TASK" MODAL
+// TOAST NOTIFICATIONS & HELPERS
 // ==========================================================================
-
-function openStartTaskModal() {
-  const modal = document.getElementById('startTaskModalOverlay');
-  if (modal) modal.classList.add('open');
-}
-
-function closeStartTaskModal() {
-  const modal = document.getElementById('startTaskModalOverlay');
-  if (modal) modal.classList.remove('open');
-}
-
-function applyTaskPreset(preset) {
-  if (!preset) return;
-  const nameEl = document.getElementById('modalTaskName');
-  if (nameEl) nameEl.value = preset;
-
-  const argsEl = document.getElementById('modalTaskArgs');
-  const kwargsEl = document.getElementById('modalTaskKwargs');
-  const queueEl = document.getElementById('modalTaskQueue');
-  const retriesEl = document.getElementById('modalTaskRetries');
-
-  if (preset === 'celerlite.demo.add') {
-    if (argsEl) argsEl.value = '[15, 25]';
-    if (kwargsEl) kwargsEl.value = '{}';
-    if (queueEl) queueEl.value = 'default';
-  } else if (preset === 'celerlite.demo.multiply') {
-    if (argsEl) argsEl.value = '[7, 8]';
-    if (kwargsEl) kwargsEl.value = '{}';
-    if (queueEl) queueEl.value = 'default';
-  } else if (preset === 'celerlite.demo.send_email') {
-    if (argsEl) argsEl.value = '["ceo@salesforce.com", "Quarterly Cloud Report"]';
-    if (kwargsEl) kwargsEl.value = '{}';
-    if (queueEl) queueEl.value = 'emails';
-  } else if (preset === 'celerlite.demo.heavy_computation') {
-    if (argsEl) argsEl.value = '[10000]';
-    if (kwargsEl) kwargsEl.value = '{}';
-    if (queueEl) queueEl.value = 'high_priority';
-  } else if (preset === 'celerlite.demo.failing_task') {
-    if (argsEl) argsEl.value = '[]';
-    if (kwargsEl) kwargsEl.value = '{"reason": "intentional"}';
-    if (queueEl) queueEl.value = 'default';
-    if (retriesEl) retriesEl.value = '2';
-  }
-}
-
-async function handleStartTaskSubmit(event) {
-  event.preventDefault();
-  const btn = document.getElementById('btnSubmitModal');
-  if (btn) {
-    btn.disabled = true;
-    btn.textContent = 'Saving...';
-  }
-
-  try {
-    const taskName = document.getElementById('modalTaskName').value.trim();
-    const queue = document.getElementById('modalTaskQueue').value;
-    const priority = parseInt(document.getElementById('modalTaskPriority').value, 10);
-    const args = JSON.parse(document.getElementById('modalTaskArgs').value || '[]');
-    const kwargs = JSON.parse(document.getElementById('modalTaskKwargs').value || '{}');
-    const maxRetries = parseInt(document.getElementById('modalTaskRetries').value, 10);
-    const timeout = parseInt(document.getElementById('modalTaskTimeout').value, 10);
-
-    const res = await fetch(`${API}/api/v1/tasks/submit`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        task_name: taskName,
-        args,
-        kwargs,
-        queue,
-        priority,
-        max_retries: maxRetries,
-        timeout,
-      }),
-    });
-
-    if (res.ok) {
-      const data = await res.json();
-      showToast(`Task created: ${data.task_id.substring(0, 8)}…`, 'success');
-      closeStartTaskModal();
-      loadExecutions();
-    } else {
-      showToast('Error creating task record', 'error');
-    }
-  } catch (err) {
-    showToast(`Invalid JSON: ${err.message}`, 'error');
-  } finally {
-    if (btn) {
-      btn.disabled = false;
-      btn.textContent = 'Save & Run Task';
-    }
-  }
-}
-
-async function triggerBatchDemo() {
-  showToast('Submitting 10 demonstration tasks...', 'info');
-  for (let i = 1; i <= 10; i++) {
-    await fetch(`${API}/api/v1/tasks/submit`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        task_name: i % 2 === 0 ? 'celerlite.demo.add' : 'celerlite.demo.multiply',
-        args: [i * 3, i * 7],
-        queue: i % 3 === 0 ? 'payments' : 'default',
-        priority: i % 4,
-      }),
-    });
-  }
-  loadExecutions();
-}
-
-// ==========================================================================
-// DLQ ACTIONS
-// ==========================================================================
-
-async function replayDLQEntry(entryId) {
-  try {
-    const res = await fetch(`${API}/api/v1/dlq/${entryId}/replay`, { method: 'POST' });
-    if (res.ok) {
-      showToast('Task re-enqueued for execution', 'success');
-      loadDLQ();
-      loadExecutions();
-    }
-  } catch (err) {
-    showToast('Failed to replay task', 'error');
-  }
-}
-
-async function deleteDLQEntry(entryId) {
-  try {
-    const res = await fetch(`${API}/api/v1/dlq/${entryId}`, { method: 'DELETE' });
-    if (res.ok) {
-      showToast('DLQ record purged', 'info');
-      loadDLQ();
-    }
-  } catch (err) {
-    showToast('Failed to purge record', 'error');
-  }
-}
-
-async function replayAllDLQ() {
-  try {
-    const res = await fetch(`${API}/api/v1/dlq/replay-all`, { method: 'POST' });
-    if (res.ok) {
-      const data = await res.json();
-      showToast(`Replayed ${data.replayed_count} dead-lettered tasks`, 'success');
-      loadDLQ();
-      loadExecutions();
-    }
-  } catch (err) {
-    showToast('Failed to replay DLQ', 'error');
-  }
-}
-
-// ==========================================================================
-// CHARTS (CHART.JS SALESFORCE LIGHT THEME)
-// ==========================================================================
-
-function initCharts() {
-  // Line Chart: Throughput Velocity
-  const throughputCtx = document.getElementById('throughputChart')?.getContext('2d');
-  if (throughputCtx) {
-    const initialLabels = Array(20).fill('');
-    const initialData = Array(20).fill(0);
-
-    throughputChart = new Chart(throughputCtx, {
-      type: 'line',
-      data: {
-        labels: initialLabels,
-        datasets: [{
-          label: 'Tasks / sec',
-          data: initialData,
-          borderColor: '#0176d3',
-          backgroundColor: 'rgba(1, 118, 211, 0.08)',
-          borderWidth: 2.5,
-          fill: true,
-          tension: 0.3,
-          pointRadius: 0,
-          pointHoverRadius: 5,
-          pointHoverBackgroundColor: '#0176d3',
-        }]
-      },
-      options: {
-        responsive: true,
-        maintainAspectRatio: false,
-        animation: { duration: 300 },
-        plugins: {
-          legend: { display: false },
-          tooltip: {
-            backgroundColor: '#032d60',
-            titleFont: { family: 'Inter', size: 11 },
-            bodyFont: { family: 'JetBrains Mono', size: 12 },
-            padding: 8,
-          }
-        },
-        scales: {
-          x: { display: false },
-          y: {
-            beginAtZero: true,
-            grid: { color: '#f3f3f3' },
-            ticks: {
-              color: '#706e6b',
-              font: { family: 'JetBrains Mono', size: 10 },
-              maxTicksLimit: 5,
-            }
-          }
-        }
-      }
-    });
-  }
-
-  // Donut Chart: Status Distribution
-  const donutCtx = document.getElementById('statusDonut')?.getContext('2d');
-  if (donutCtx) {
-    statusDonutChart = new Chart(donutCtx, {
-      type: 'doughnut',
-      data: {
-        labels: ['Completed', 'Running', 'Failed', 'DLQ'],
-        datasets: [{
-          data: [1, 0, 0, 0],
-          backgroundColor: ['#2e844a', '#0176d3', '#ea001e', '#7f22fe'],
-          borderWidth: 2,
-          borderColor: '#ffffff',
-        }]
-      },
-      options: {
-        responsive: true,
-        maintainAspectRatio: false,
-        cutout: '72%',
-        plugins: {
-          legend: {
-            position: 'bottom',
-            labels: {
-              color: '#444444',
-              font: { family: 'Inter', size: 11 },
-              boxWidth: 8,
-              padding: 12,
-            }
-          }
-        }
-      }
-    });
-  }
-}
-
-function updateDonutChart(counts) {
-  if (!statusDonutChart) return;
-  const completed = counts.SUCCESS || 0;
-  const running = counts.RUNNING || 0;
-  const failed = counts.FAILED || 0;
-  const dlq = counts.DEAD_LETTERED || 0;
-
-  statusDonutChart.data.datasets[0].data = [completed, running, failed, dlq];
-  statusDonutChart.update();
-}
-
-function recordThroughputSample(tps) {
-  if (!throughputChart) return;
-  throughputHistory.push(tps);
-  if (throughputHistory.length > 20) throughputHistory.shift();
-
-  throughputChart.data.datasets[0].data = [...throughputHistory];
-  throughputChart.update();
-}
-
-// ==========================================================================
-// HELPERS
-// ==========================================================================
-
-function getStatusPill(status) {
-  switch (status) {
-    case 'SUCCESS': return { text: 'COMPLETED', css: 'status-success' };
-    case 'RUNNING': return { text: 'IN-PROGRESS', css: 'status-running' };
-    case 'FAILED': return { text: 'FAILED', css: 'status-failed' };
-    case 'DEAD_LETTERED': return { text: 'DEAD LETTER', css: 'status-dlq' };
-    case 'PENDING': return { text: 'PENDING', css: 'status-pending' };
-    case 'REVOKED': return { text: 'REVOKED', css: 'status-failed' };
-    default: return { text: status, css: 'status-pending' };
-  }
-}
-
-function getPriorityLabel(priority) {
-  switch (parseInt(priority, 10)) {
-    case 3: return { text: 'CRITICAL', css: 'priority-critical' };
-    case 2: return { text: 'HIGH', css: 'priority-high' };
-    case 1: return { text: 'NORMAL', css: 'priority-normal' };
-    case 0: return { text: 'LOW', css: 'priority-low' };
-    default: return { text: 'NORMAL', css: 'priority-normal' };
-  }
-}
-
-function formatDuration(ms, startedAt, completedAt) {
-  if (ms !== null && ms !== undefined) {
-    if (ms < 1000) return `${Math.round(ms)}ms`;
-    return `${(ms / 1000).toFixed(2)}s`;
-  }
-  if (startedAt && completedAt) {
-    const diff = new Date(completedAt).getTime() - new Date(startedAt).getTime();
-    if (diff < 1000) return `${diff}ms`;
-    return `${(diff / 1000).toFixed(2)}s`;
-  }
-  return '—';
-}
-
-function formatTimeAgo(isoString) {
-  if (!isoString) return '—';
-  const sec = Math.floor((Date.now() - new Date(isoString).getTime()) / 1000);
-  if (sec < 5) return 'just now';
-  if (sec < 60) return `${sec}s ago`;
-  const min = Math.floor(sec / 60);
-  if (min < 60) return `${min}m ago`;
-  const hr = Math.floor(min / 60);
-  if (hr < 24) return `${hr}h ago`;
-  return `${Math.floor(hr / 24)}d ago`;
-}
 
 function showToast(message, type = 'info') {
   const container = document.getElementById('toastContainer');
@@ -1061,10 +1055,7 @@ function showToast(message, type = 'info') {
 
   const toast = document.createElement('div');
   toast.className = `slds-toast toast-${type}`;
-  toast.innerHTML = `
-    <span>${type === 'success' ? '[OK]' : (type === 'error' ? '[ERR]' : '[INFO]')}</span>
-    <span>${escapeHtml(message)}</span>
-  `;
+  toast.textContent = message;
 
   container.appendChild(toast);
   setTimeout(() => {
@@ -1074,12 +1065,12 @@ function showToast(message, type = 'info') {
   }, 3500);
 }
 
-function escapeHtml(str) {
-  if (!str) return '';
-  return String(str)
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#039;');
+function formatDateTime(isoString) {
+  if (!isoString) return '—';
+  try {
+    const d = new Date(isoString);
+    return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+  } catch {
+    return isoString;
+  }
 }

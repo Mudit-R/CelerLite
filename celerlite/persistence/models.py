@@ -209,3 +209,171 @@ class DLQEntry(Base):
             "metadata_json": self.metadata_json,
         }
 
+
+class LeadModel(Base):
+    __tablename__ = "crm_leads"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    first_name: Mapped[str] = mapped_column(String(100), nullable=False)
+    last_name: Mapped[str] = mapped_column(String(100), nullable=False)
+    company: Mapped[str] = mapped_column(String(200), nullable=False)
+    title: Mapped[str | None] = mapped_column(String(150), nullable=True)
+    email: Mapped[str] = mapped_column(String(255), nullable=False)
+    phone: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    status: Mapped[str] = mapped_column(String(50), nullable=False, default="New")
+    lead_source: Mapped[str] = mapped_column(String(100), nullable=False, default="Web")
+    score: Mapped[int] = mapped_column(Integer, nullable=False, default=70)
+    annual_revenue: Mapped[float | None] = mapped_column(BigInteger, nullable=True)
+    notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    owner: Mapped[str] = mapped_column(String(100), nullable=False, default="Alex Chen")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utcnow)
+
+    def to_dict(self) -> dict:
+        return {
+            "id": self.id,
+            "first_name": self.first_name,
+            "last_name": self.last_name,
+            "name": f"{self.first_name} {self.last_name}",
+            "company": self.company,
+            "title": self.title or "",
+            "email": self.email,
+            "phone": self.phone or "",
+            "status": self.status,
+            "lead_source": self.lead_source,
+            "score": self.score,
+            "annual_revenue": self.annual_revenue,
+            "notes": self.notes or "",
+            "owner": self.owner,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+            "updated_at": self.updated_at.isoformat() if self.updated_at else None,
+        }
+
+
+class AccountModel(Base):
+    __tablename__ = "crm_accounts"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    name: Mapped[str] = mapped_column(String(200), nullable=False)
+    industry: Mapped[str] = mapped_column(String(100), nullable=False, default="Technology")
+    annual_revenue: Mapped[float] = mapped_column(BigInteger, nullable=False, default=1000000)
+    employees: Mapped[int] = mapped_column(Integer, nullable=False, default=50)
+    website: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    phone: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    billing_city: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    billing_country: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    tier: Mapped[str] = mapped_column(String(50), nullable=False, default="Enterprise")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utcnow)
+
+    def to_dict(self) -> dict:
+        return {
+            "id": self.id,
+            "name": self.name,
+            "industry": self.industry,
+            "annual_revenue": self.annual_revenue,
+            "employees": self.employees,
+            "website": self.website or "",
+            "phone": self.phone or "",
+            "billing_city": self.billing_city or "",
+            "billing_country": self.billing_country or "",
+            "tier": self.tier,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+        }
+
+
+class ContactModel(Base):
+    __tablename__ = "crm_contacts"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    account_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
+    account_name: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    first_name: Mapped[str] = mapped_column(String(100), nullable=False)
+    last_name: Mapped[str] = mapped_column(String(100), nullable=False)
+    email: Mapped[str] = mapped_column(String(255), nullable=False)
+    phone: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    title: Mapped[str | None] = mapped_column(String(150), nullable=True)
+    department: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    is_primary: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utcnow)
+
+    def to_dict(self) -> dict:
+        return {
+            "id": self.id,
+            "account_id": self.account_id,
+            "account_name": self.account_name or "",
+            "first_name": self.first_name,
+            "last_name": self.last_name,
+            "name": f"{self.first_name} {self.last_name}",
+            "email": self.email,
+            "phone": self.phone or "",
+            "title": self.title or "",
+            "department": self.department or "",
+            "is_primary": self.is_primary,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+        }
+
+
+class DealModel(Base):
+    __tablename__ = "crm_deals"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    account_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
+    account_name: Mapped[str] = mapped_column(String(200), nullable=False)
+    name: Mapped[str] = mapped_column(String(255), nullable=False)
+    stage: Mapped[str] = mapped_column(String(50), nullable=False, default="Prospecting")
+    amount: Mapped[float] = mapped_column(BigInteger, nullable=False, default=50000)
+    probability: Mapped[int] = mapped_column(Integer, nullable=False, default=20)
+    close_date: Mapped[str] = mapped_column(String(20), nullable=False)
+    deal_type: Mapped[str] = mapped_column(String(50), nullable=False, default="New Business")
+    owner: Mapped[str] = mapped_column(String(100), nullable=False, default="Alex Chen")
+    next_step: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utcnow)
+
+    def to_dict(self) -> dict:
+        return {
+            "id": self.id,
+            "account_id": self.account_id,
+            "account_name": self.account_name,
+            "name": self.name,
+            "stage": self.stage,
+            "amount": self.amount,
+            "probability": self.probability,
+            "close_date": self.close_date,
+            "deal_type": self.deal_type,
+            "owner": self.owner,
+            "next_step": self.next_step or "",
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+            "updated_at": self.updated_at.isoformat() if self.updated_at else None,
+        }
+
+
+class ActivityModel(Base):
+    __tablename__ = "crm_activities"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    entity_type: Mapped[str] = mapped_column(String(50), nullable=False)  # lead, deal, account, contact
+    entity_id: Mapped[str] = mapped_column(String(36), nullable=False)
+    entity_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    type: Mapped[str] = mapped_column(String(50), nullable=False, default="Task")  # Call, Email, Meeting, Task, Note
+    subject: Mapped[str] = mapped_column(String(255), nullable=False)
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    due_date: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    status: Mapped[str] = mapped_column(String(50), nullable=False, default="Pending")  # Pending, Completed
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utcnow)
+
+    def to_dict(self) -> dict:
+        return {
+            "id": self.id,
+            "entity_type": self.entity_type,
+            "entity_id": self.entity_id,
+            "entity_name": self.entity_name or "",
+            "type": self.type,
+            "subject": self.subject,
+            "description": self.description or "",
+            "due_date": self.due_date or "",
+            "status": self.status,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+        }
+
+

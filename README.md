@@ -1,4 +1,4 @@
-# CelerLite — Distributed Task Queue & Execution Engine
+# CelerLite CRM — Enterprise Sales Platform & Distributed Task Engine
 
 [![Live Demo](https://img.shields.io/badge/Live%20Demo-Render-46E3B7?logo=render&logoColor=white)](https://celerlite.onrender.com/)
 [![Python](https://img.shields.io/badge/Python-3.11%20%7C%203.12-blue?logo=python&logoColor=white)](https://python.org)
@@ -6,12 +6,12 @@
 [![Redis](https://img.shields.io/badge/Redis-7.0+-DC382D?logo=redis&logoColor=white)](https://redis.io)
 [![PostgreSQL](https://img.shields.io/badge/PostgreSQL-15+-336791?logo=postgresql&logoColor=white)](https://postgresql.org)
 [![Docker](https://img.shields.io/badge/Docker-Compose-2496ED?logo=docker&logoColor=white)](https://docker.com)
-[![Tests](https://img.shields.io/badge/Tests-49%20Passed%20(100%25)-success?logo=pytest&logoColor=white)](tests/)
+[![Tests](https://img.shields.io/badge/Tests-51%20Passed%20(100%25)-success?logo=pytest&logoColor=white)](tests/)
 [![License](https://img.shields.io/badge/License-MIT-purple.svg)](LICENSE)
 
 > **Live Deployment**: [https://celerlite.onrender.com/](https://celerlite.onrender.com/)  
 > **Swagger API Docs**: [https://celerlite.onrender.com/docs](https://celerlite.onrender.com/docs)  
-> **CelerLite** is a distributed asynchronous task queue and execution engine written in Python. Designed for low-latency, high-throughput task processing with multi-level priority scheduling, at-least-once execution guarantees, automatic dead-letter queue (DLQ) isolation, distributed rate limiting, and a real-time monitoring dashboard with live WebSocket telemetry.
+> **CelerLite CRM** is an enterprise-grade Customer Relationship Management (CRM) platform and distributed asynchronous execution engine. Designed with a Salesforce Lightning interface, it features full Lead Management, interactive Opportunities/Deals Kanban Pipeline, Corporate Accounts, Contact Directory, Activity Timelines, and automated background AI workflow dispatch.
 
 ---
 
@@ -302,6 +302,16 @@ vip_task.revoke()
 
 | Method | Endpoint | Description |
 |:---|:---|:---|
+| `GET` | `/api/v1/crm/stats` | Executive KPI aggregates (Pipeline sum, win rate, deal counts) |
+| `GET`, `POST` | `/api/v1/crm/leads` | List inbound leads or create a new lead |
+| `PUT`, `DELETE` | `/api/v1/crm/leads/{id}` | Update lead status/score or delete lead |
+| `POST` | `/api/v1/crm/leads/{id}/convert` | Convert qualified lead directly into an Opportunity |
+| `GET`, `POST` | `/api/v1/crm/deals` | List pipeline opportunities or create new deal |
+| `PUT`, `DELETE` | `/api/v1/crm/deals/{id}` | Advance deal stage in Kanban pipeline or delete |
+| `GET`, `POST` | `/api/v1/crm/accounts` | Manage corporate accounts directory |
+| `GET`, `POST` | `/api/v1/crm/contacts` | Manage contacts linked to accounts |
+| `GET`, `POST` | `/api/v1/crm/activities` | Activity timeline (Calls, Meetings, Tasks, Notes) |
+| `POST` | `/api/v1/crm/automate` | Dispatch asynchronous AI lead scoring & drip campaigns |
 | `POST` | `/api/v1/tasks/submit` | Enqueue a task with priority, args, and timeout |
 | `GET` | `/api/v1/tasks/{task_id}` | Retrieve task state, error messages, and timing |
 | `GET` | `/api/v1/tasks/{task_id}/result`| Fast-path retrieval of completed result from Redis |

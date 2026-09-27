@@ -93,7 +93,7 @@ async def lifespan(app: FastAPI):
 
 
 def create_app(serverless: bool = False) -> FastAPI:
-    from celerlite.api.routes import dlq, metrics, tasks, workers
+    from celerlite.api.routes import crm, dlq, metrics, tasks, workers
     from fastapi import Depends
 
     is_serverless = (
@@ -107,8 +107,8 @@ def create_app(serverless: bool = False) -> FastAPI:
     app_lifespan = None if is_serverless else lifespan
 
     app = FastAPI(
-        title="CelerLite",
-        description="Distributed Task Queue Engine — Real-Time Monitoring & Control",
+        title="CelerLite CRM & Task Engine",
+        description="Enterprise Distributed CRM Platform & High-Throughput Task Queue",
         version="1.0.0",
         lifespan=app_lifespan,
         docs_url="/docs",
@@ -124,6 +124,7 @@ def create_app(serverless: bool = False) -> FastAPI:
     )
 
     # REST routers
+    app.include_router(crm.router, prefix="/api/v1/crm", tags=["CRM"])
     app.include_router(tasks.router, prefix="/api/v1/tasks", tags=["Tasks"])
     app.include_router(workers.router, prefix="/api/v1/workers", tags=["Workers"])
     app.include_router(dlq.router, prefix="/api/v1/dlq", tags=["Dead Letter Queue"])
