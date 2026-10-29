@@ -515,7 +515,7 @@
           <div class="kpi-subtext">Live heartbeat count</div>
         </div>
         <div class="slds-kpi-card">
-          <div class="kpi-label">Recent Tasks</div>
+          <div class="kpi-label">Loaded Tasks</div>
           <div class="kpi-value" id="engineTotalTasks">0</div>
           <div class="kpi-subtext">At-least-once delivery</div>
         </div>
@@ -529,9 +529,22 @@
       <!-- Engine Task Table -->
       <div class="slds-card mt-4">
         <div class="slds-card-header">
-          <h2 class="slds-card-title">Recent Background Engine Executions</h2>
+          <h2 class="slds-card-title">Task activity</h2>
           <button class="slds-btn slds-btn-neutral slds-btn-sm" onclick="loadEngineTasks()">Refresh Queue</button>
         </div>
+        <div class="engine-toolbar">
+          <label>Search this result set<input class="slds-input" id="engineSearch" type="search" placeholder="Task name, ID, or worker" oninput="renderEngineTasks()" /></label>
+          <label>Status<select class="slds-select" id="engineStatusFilter" onchange="loadEngineTasks()">
+            <option value="">All statuses</option><option>PENDING</option><option>RUNNING</option><option>SUCCESS</option><option>FAILED</option><option>RETRYING</option><option>REVOKED</option>
+          </select></label>
+          <form onsubmit="event.preventDefault();applyEngineQueueFilter()" class="engine-queue-filter">
+            <label>Queue<input class="slds-input" id="engineQueueFilter" placeholder="All queues" /></label>
+            <button class="slds-btn slds-btn-neutral" type="submit">Apply</button>
+          </form>
+          <label class="engine-live-toggle"><input type="checkbox" id="engineAutoRefresh" checked /> Live refresh</label>
+        </div>
+        <p class="engine-feedback" id="engineFeedback" role="status">Loading task activity…</p>
+        <p class="engine-feedback engine-error" id="engineLoadError" role="alert" hidden></p>
         <div class="slds-table-responsive">
           <table class="slds-table">
             <thead>

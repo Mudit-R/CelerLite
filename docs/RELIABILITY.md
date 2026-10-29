@@ -60,3 +60,19 @@ passed, including 12 real Redis integration tests. Browser checks used an isolat
 SQLite database and the embedded worker: `[20, 22]` returned `42`; missing required
 arguments surfaced as a failed execution; malformed argument types stayed in the
 form. The inspector displays stored database records, not a distributed trace.
+
+To repeat the browser check, open **CelerLite Task Queue & Workers**, choose
+**Run Custom Task**, and submit `celerlite.demo.add` on the `default` queue with
+arguments `[20, 22]` and keyword arguments `{}`. Refresh the inspector until the
+task finishes, then confirm that its saved result is `42`.
+
+## Task activity console
+
+Status and queue filters query the API; search narrows the most recent 200
+matching records by task name, ID, or worker. The count describes loaded records,
+not the lifetime number of processed tasks. Queue edits take effect on Apply.
+Live refresh polls every five seconds while the task tab is active and visible;
+uncheck it to pause. Requests have a ten-second timeout and newer responses take
+precedence over older ones. A failed refresh preserves the last results and
+shows a retry message. Local browser checks covered status/queue/search filters,
+empty results, pause, timed refresh, server outage, and successful recovery.

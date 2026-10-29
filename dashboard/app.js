@@ -20,6 +20,10 @@ let accountsList = [];
 let contactsList = [];
 let activitiesList = [];
 let engineTasksList = [];
+let engineRequest = 0;
+let engineBusy = false;
+let engineUpdatedAt = null;
+let engineQueue = '';
 
 // ==========================================================================
 // INITIALIZATION
@@ -32,6 +36,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Auto-refresh CRM stats every 5 seconds
   setInterval(loadCRMStats, 5000);
+  setInterval(() => {
+    if (currentTab === 'engine' && !document.hidden && !engineBusy &&
+        document.getElementById('engineAutoRefresh')?.checked) {
+      loadEngineTasks();
+      loadEngineStats();
+    }
+  }, 5000);
 });
 
 function setupKeyboardShortcuts() {
@@ -199,7 +210,7 @@ async function loadActivities() {
 
 async function loadEngineStats() {
   for (const [url, id, format] of [
-    ['/api/v1/workers/stats', 'engineWorkerCount', data => `${data.active} Workers`],
+    ['/api/v1/workers/stats', 'engineWorkerCount', data => `${data.active} ${data.active === 1 ? 'Worker' : 'Workers'}`],
     ['/api/v1/dlq/count', 'engineDLQCount', data => String(data.count)],
   ]) {
     try {
@@ -214,24 +225,57 @@ async function loadEngineStats() {
 }
 
 async function loadEngineTasks() {
+  const request = ++engineRequest;
+  engineBusy = true;
+  const feedback = document.getElementById('engineFeedback');
+  const errorBox = document.getElementById('engineLoadError');
+  feedback.textContent = 'Refreshing task activity…';
+  const params = new URLSearchParams({ limit: '200' });
+  const status = document.getElementById('engineStatusFilter')?.value;
+  const queue = engineQueue;
+  if (status) params.set('status', status);
+  if (queue) params.set('queue', queue);
   try {
-    const res = await fetch(`${API}/api/v1/tasks?limit=50`);
-    if (!res.ok) return;
+    const res = await fetch(`${API}/api/v1/tasks?${params}`, { signal: AbortSignal.timeout(10000) });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const data = await res.json();
+    if (request !== engineRequest) return;
     engineTasksList = Array.isArray(data) ? data : (data.tasks || []);
-    
+    engineUpdatedAt = new Date();
+    errorBox.hidden = true;
+    renderEngineTasks();
+  } catch (err) {
+    if (request !== engineRequest) return;
+    errorBox.hidden = false;
+    errorBox.textContent = `Task refresh failed. ${engineUpdatedAt ? 'Showing the last loaded results.' : 'No results have loaded yet.'} Use Refresh Queue to retry.`;
+    feedback.textContent = engineUpdatedAt ? `Last successful update: ${engineUpdatedAt.toLocaleTimeString()}` : 'Task activity unavailable';
+  } finally {
+    if (request === engineRequest) engineBusy = false;
+  }
+}
+
+function applyEngineQueueFilter() {
+  engineQueue = document.getElementById('engineQueueFilter').value.trim();
+  loadEngineTasks();
+}
+
+function renderEngineTasks() {
+    const search = (document.getElementById('engineSearch')?.value || '').trim().toLowerCase();
+    const tasks = engineTasksList.filter(task => [task.task_name, task.id, task.worker_id].some(value => String(value || '').toLowerCase().includes(search)));
+    const feedback = document.getElementById('engineFeedback');
+    feedback.textContent = `${tasks.length} shown of ${engineTasksList.length} loaded · most recent 200 matching tasks${engineUpdatedAt ? ` · Updated ${engineUpdatedAt.toLocaleTimeString()}` : ''}`;
     const countEl = document.getElementById('engineTotalTasks');
     if (countEl) countEl.textContent = engineTasksList.length;
 
     const tbody = document.getElementById('engineTasksTableBody');
     if (!tbody) return;
 
-    if (engineTasksList.length === 0) {
-      tbody.innerHTML = '<tr><td colspan="7" class="text-center py-4 text-muted">No background tasks enqueued yet.</td></tr>';
+    if (tasks.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="7" class="text-center py-4 text-muted">No tasks match these filters. Clear the search or change the status and queue.</td></tr>';
       return;
     }
 
-    tbody.innerHTML = engineTasksList.slice(0, 15).map(t => `
+    tbody.innerHTML = tasks.map(t => `
       <tr>
         <td><button class="slds-btn slds-btn-neutral slds-btn-sm" data-task-id="${escapeTaskHTML(t.id)}">${escapeTaskHTML((t.id || '').substring(0, 8))}…</button></td>
         <td class="font-semibold text-brand">${escapeTaskHTML(t.task_name)}</td>
@@ -245,9 +289,6 @@ async function loadEngineTasks() {
     tbody.querySelectorAll('[data-task-id]').forEach(button => {
       button.addEventListener('click', () => openTaskInspector(button.dataset.taskId));
     });
-  } catch (err) {
-    console.warn('Failed to load engine tasks', err);
-  }
 }
 
 // ==========================================================================
@@ -1135,7 +1176,9 @@ function showToast(message, type = 'info') {
 function formatDateTime(isoString) {
   if (!isoString) return '—';
   try {
-    const d = new Date(isoString);
+    // SQLite returns UTC database timestamps without a timezone suffix.
+    const timestamp = /(?:Z|[+-]\d{2}:?\d{2})$/i.test(isoString) ? isoString : `${isoString}Z`;
+    const d = new Date(timestamp);
     return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
   } catch {
     return isoString;
