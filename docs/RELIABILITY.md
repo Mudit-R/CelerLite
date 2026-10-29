@@ -51,3 +51,12 @@ should use bounded recovery batches in a future revision.
 Redis and the dead-letter database do not share a transaction: a crash after a
 successful dead-letter write but before acknowledgement may cause a repeated write;
 dead-letter persistence should be made idempotent in future work.
+
+## Task inspector validation
+
+The follow-up API suite includes invalid payload rejection before enqueueing and
+persisted task detail checks. Full local validation after this change: 78 tests
+passed, including 12 real Redis integration tests. Browser checks used an isolated
+SQLite database and the embedded worker: `[20, 22]` returned `42`; missing required
+arguments surfaced as a failed execution; malformed argument types stayed in the
+form. The inspector displays stored database records, not a distributed trace.

@@ -5,7 +5,7 @@ import uuid
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from pydantic import BaseModel
+from pydantic import BaseModel, Field, field_validator
 
 from celerlite.api.app import get_broker
 from celerlite.broker.redis_broker import RedisBroker
@@ -20,15 +20,23 @@ router = APIRouter()
 
 
 class SubmitTaskRequest(BaseModel):
-    task_name: str
-    args: list = []
-    kwargs: dict = {}
+    task_name: str = Field(min_length=1, max_length=255)
+    args: list = Field(default_factory=list)
+    kwargs: dict = Field(default_factory=dict)
     queue: str = "default"
-    priority: int = 1
+    priority: int = Field(default=1, ge=0, le=3)
     eta: Optional[str] = None
-    metadata: dict = {}
-    max_retries: int = 3
-    timeout: int = 300
+    metadata: dict = Field(default_factory=dict)
+    max_retries: int = Field(default=3, ge=0)
+    timeout: int = Field(default=300, ge=1)
+
+
+    @field_validator('task_name', 'queue')
+    @classmethod
+    def non_blank(cls, value: str) -> str:
+        if not value.strip():
+            raise ValueError('must not be blank')
+        return value.strip()
 
 
 class RevokeResponse(BaseModel):
@@ -142,8 +150,8 @@ async def get_task_result(task_id: str, broker: RedisBroker = Depends(get_broker
 async def list_tasks(
     status: Optional[str] = Query(None),
     queue: Optional[str] = Query(None),
-    limit: int = Query(50, le=200),
-    offset: int = Query(0),
+    limit: int = Query(50, ge=1, le=200),
+    offset: int = Query(0, ge=0),
 ):
     """List tasks with optional filters."""
     async with get_session() as session:

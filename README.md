@@ -379,3 +379,16 @@ If you are showcasing CelerLite on your resume, LinkedIn, or GitHub portfolio, h
 ## License
 
 This project is licensed under the MIT License — see the [LICENSE](LICENSE) file for details.
+
+## Task inspection and submission
+
+In **CelerLite Task Queue & Workers**, choose **Run Custom Task**. Enter JSON
+arguments and keyword arguments. For example, run `celerlite.demo.add` on the
+`default` queue with `[20, 22]` and `{}`. Invalid JSON or argument types remain
+in the form with an inline error. Submission opens a task inspector; refresh it
+to see the worker, timestamps, arguments, saved result, or execution error.
+Task IDs in the history also reopen the inspector. The standalone worker must
+consume the selected queue for execution to occur; standalone mode does not
+provide the full distributed worker retry lifecycle.
+
+![Task inspector with a verified result](docs/task-inspector.jpg)

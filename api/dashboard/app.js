@@ -233,15 +233,18 @@ async function loadEngineTasks() {
 
     tbody.innerHTML = engineTasksList.slice(0, 15).map(t => `
       <tr>
-        <td class="font-mono">${(t.id || '').substring(0, 8)}...</td>
-        <td class="font-semibold text-brand">${t.task_name}</td>
-        <td><span class="badge-neutral">${t.queue || 'default'}</span></td>
+        <td><button class="slds-btn slds-btn-neutral slds-btn-sm" data-task-id="${escapeTaskHTML(t.id)}">${escapeTaskHTML((t.id || '').substring(0, 8))}…</button></td>
+        <td class="font-semibold text-brand">${escapeTaskHTML(t.task_name)}</td>
+        <td><span class="badge-neutral">${escapeTaskHTML(t.queue || 'default')}</span></td>
         <td>P${t.priority ?? 1}</td>
-        <td><span class="badge-status status-${(t.status || 'PENDING').toLowerCase()}">${t.status}</span></td>
-        <td class="text-muted">${t.worker_id || 'unassigned'}</td>
+        <td><span class="badge-status status-${escapeTaskHTML((t.status || 'PENDING').toLowerCase())}">${escapeTaskHTML(t.status)}</span></td>
+        <td class="text-muted">${escapeTaskHTML(t.worker_id || 'unassigned')}</td>
         <td class="text-muted text-xs">${formatDateTime(t.created_at)}</td>
       </tr>
     `).join('');
+    tbody.querySelectorAll('[data-task-id]').forEach(button => {
+      button.addEventListener('click', () => openTaskInspector(button.dataset.taskId));
+    });
   } catch (err) {
     console.warn('Failed to load engine tasks', err);
   }
@@ -1029,27 +1032,74 @@ async function triggerAutomationAction(actionName) {
 
 async function handleStartTask(e) {
   e.preventDefault();
-  const payload = {
-    task_name: document.getElementById('modalTaskName').value,
-    queue: document.getElementById('modalTaskQueue').value,
-    priority: parseInt(document.getElementById('modalTaskPriority').value),
-    args: [],
-  };
-
+  const errorBox = document.getElementById('taskSubmitError');
+  errorBox.textContent = '';
+  const submit = e.target.querySelector('[type="submit"]');
   try {
+    const args = JSON.parse(document.getElementById('modalTaskArgs').value);
+    const kwargs = JSON.parse(document.getElementById('modalTaskKwargs').value);
+    if (!Array.isArray(args)) throw new Error('Arguments must be a JSON array, such as [20, 22].');
+    if (!kwargs || typeof kwargs !== 'object' || Array.isArray(kwargs)) throw new Error('Keyword arguments must be a JSON object.');
+    submit.disabled = true;
     const res = await fetch(`${API}/api/v1/tasks/submit`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        task_name: document.getElementById('modalTaskName').value,
+        queue: document.getElementById('modalTaskQueue').value,
+        priority: Number(document.getElementById('modalTaskPriority').value), args, kwargs,
+      }),
     });
-    if (res.ok) {
-      const data = await res.json();
-      showToast(`Task enqueued: ${data.task_id.substring(0,8)}`, 'success');
-      closeModal('modalStartTask');
-      await loadEngineTasks();
-    }
+    if (!res.ok) throw new Error(`Submission failed (HTTP ${res.status}). Check the task name and arguments.`);
+    const data = await res.json();
+    closeModal('modalStartTask');
+    showToast(`Task enqueued: ${data.task_id.substring(0, 8)}`, 'success');
+    await loadEngineTasks();
+    await openTaskInspector(data.task_id);
   } catch (err) {
-    showToast('Failed to submit task', 'error');
+    errorBox.textContent = err.message;
+  } finally {
+    submit.disabled = false;
+  }
+}
+
+function escapeTaskHTML(value) {
+  return String(value ?? '').replace(/[&<>"']/g, char => ({
+    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
+  }[char]));
+}
+
+let inspectedTaskId = null;
+let inspectorRequest = 0;
+async function openTaskInspector(taskId) {
+  inspectedTaskId = taskId;
+  openModal('modalTaskDetail');
+  await refreshTaskInspector();
+}
+
+async function refreshTaskInspector() {
+  if (!inspectedTaskId) return;
+  const request = ++inspectorRequest;
+  const status = document.getElementById('taskDetailStatus');
+  const content = document.getElementById('taskDetailContent');
+  status.textContent = 'Loading task details…';
+  content.textContent = '';
+  try {
+    const res = await fetch(`${API}/api/v1/tasks/${encodeURIComponent(inspectedTaskId)}`);
+    if (!res.ok) throw new Error(`Could not load task (HTTP ${res.status}).`);
+    const task = await res.json();
+    if (request !== inspectorRequest) return;
+    status.textContent = `${task.task_name} · ${task.status}`;
+    const details = { id: task.id, queue: task.queue, priority: task.priority,
+      worker: task.worker_id, retries: `${task.retry_count}/${task.max_retries}`,
+      created: task.created_at, started: task.started_at, completed: task.completed_at };
+    for (const [label, key] of [['arguments', 'args_json'], ['keyword_arguments', 'kwargs_json'], ['result', 'result_json']]) {
+      try { details[label] = task[key] ? JSON.parse(task[key]) : null; }
+      catch { details[label] = task[key]; }
+    }
+    details.error = task.error_message;
+    content.textContent = JSON.stringify(details, null, 2);
+  } catch (err) {
+    if (request === inspectorRequest) status.textContent = err.message;
   }
 }
 

@@ -924,6 +924,16 @@
             <label class="slds-form-label required">Task Name</label>
             <input type="text" class="slds-input" id="modalTaskName" value="celerlite.demo.heavy_computation" required />
           </div>
+          <div class="slds-form-element">
+            <label class="slds-form-label" for="modalTaskArgs">Arguments (JSON array)</label>
+            <textarea class="slds-input" id="modalTaskArgs" rows="2">[]</textarea>
+          </div>
+          <div class="slds-form-element">
+            <label class="slds-form-label" for="modalTaskKwargs">Keyword arguments (JSON object)</label>
+            <textarea class="slds-input" id="modalTaskKwargs" rows="2">{}</textarea>
+            <p>Try celerlite.demo.add with arguments [20, 22] on the default queue.</p>
+          </div>
+          <p id="taskSubmitError" role="alert" style="color:#b91c1c;white-space:pre-wrap"></p>
           <div class="slds-form-grid">
             <div class="slds-form-element">
               <label class="slds-form-label">Queue</label>
@@ -950,6 +960,23 @@
           <button type="submit" class="slds-btn slds-btn-brand">Enqueue Task</button>
         </div>
       </form>
+    </div>
+  </div>
+
+  <div class="slds-modal-backdrop" id="modalTaskDetail" role="dialog" aria-modal="true" aria-labelledby="taskDetailTitle">
+    <div class="slds-modal-card">
+      <div class="modal-card-header">
+        <h3 id="taskDetailTitle">Task inspector</h3>
+        <button class="modal-close-btn" aria-label="Close task inspector" onclick="closeModal('modalTaskDetail')">×</button>
+      </div>
+      <div class="modal-card-body">
+        <p id="taskDetailStatus" role="status"></p>
+        <pre id="taskDetailContent" style="white-space:pre-wrap;overflow-wrap:anywhere;background:#f3f6fb;padding:16px;border-radius:8px;max-height:50vh;overflow:auto"></pre>
+      </div>
+      <div class="modal-card-footer">
+        <button class="slds-btn slds-btn-neutral" onclick="refreshTaskInspector()">Refresh task details</button>
+        <button class="slds-btn slds-btn-brand" onclick="closeModal('modalTaskDetail')">Done</button>
+      </div>
     </div>
   </div>
 

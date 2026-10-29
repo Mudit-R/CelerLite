@@ -118,3 +118,26 @@ class TestAPIEndpoints:
             assert resp.status_code == 200
             assert isinstance(resp.json(), list)
             assert len(resp.json()) == 0
+
+    @pytest.mark.parametrize('field,value', [
+        ('task_name', '   '), ('queue', ''), ('priority', 4),
+        ('priority', -1), ('timeout', 0), ('max_retries', -1),
+        ('args', {}), ('kwargs', []),
+    ])
+    async def test_invalid_submission_does_not_enqueue(self, test_app, field, value):
+        app, broker = test_app
+        async with AsyncClient(transport=ASGITransport(app=app), base_url='http://test') as client:
+            response = await client.post('/api/v1/tasks/submit', json={'task_name': 'demo.add', field: value})
+        assert response.status_code == 422
+        broker.enqueue.assert_not_awaited()
+
+    async def test_task_inspector_returns_saved_arguments(self, test_app):
+        app, _ = test_app
+        async with AsyncClient(transport=ASGITransport(app=app), base_url='http://test') as client:
+            submitted = await client.post('/api/v1/tasks/submit', json={
+                'task_name': 'celerlite.demo.add', 'args': [20, 22], 'kwargs': {},
+            })
+            detail = await client.get('/api/v1/tasks/' + submitted.json()['task_id'])
+        assert detail.status_code == 200
+        import json
+        assert json.loads(detail.json()['args_json']) == [20, 22]
