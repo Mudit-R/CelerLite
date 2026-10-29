@@ -129,17 +129,7 @@ async def run_embedded_worker(
                 else:
                     result_val = func(*message.args, **message.kwargs)
             else:
-                # Default demo behavior for demo tasks
-                if "add" in message.task_name:
-                    result_val = sum(message.args) if message.args else 42
-                elif "fail" in message.task_name or "flake" in message.task_name:
-                    raise ValueError("Simulated task failure for testing")
-                else:
-                    result_val = {
-                        "status": "ok",
-                        "task": message.task_name,
-                        "args": message.args,
-                    }
+                raise ValueError(f"Task not registered: {message.task_name}")
         except Exception as err:
             task_success = False
             error_msg = str(err)

@@ -259,6 +259,14 @@ function applyEngineQueueFilter() {
   loadEngineTasks();
 }
 
+function clearEngineFilters() {
+  document.getElementById('engineSearch').value = '';
+  document.getElementById('engineStatusFilter').value = '';
+  document.getElementById('engineQueueFilter').value = '';
+  engineQueue = '';
+  loadEngineTasks();
+}
+
 function renderEngineTasks() {
     const search = (document.getElementById('engineSearch')?.value || '').trim().toLowerCase();
     const tasks = engineTasksList.filter(task => [task.task_name, task.id, task.worker_id].some(value => String(value || '').toLowerCase().includes(search)));
