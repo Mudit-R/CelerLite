@@ -50,6 +50,7 @@ async def lifespan(app: FastAPI):
     )
 
     if not is_serverless:
+        embedded_mode = False
         try:
             redis_broker = RedisBroker(config)
             await redis_broker.connect()
@@ -66,11 +67,18 @@ async def lifespan(app: FastAPI):
 
             _broker = InMemoryBroker(config)
             await _broker.connect()
+            embedded_mode = True
+
+        # Initialize and seed before starting workers or serving concurrent requests.
+        await init_db()
+        from celerlite.persistence.database import get_session
+        from celerlite.persistence.crm_repository import CRMRepository
+        async with get_session() as session:
+            await CRMRepository(session).seed_demo_data_if_empty()
+        if embedded_mode:
             embedded_task = asyncio.create_task(
                 run_embedded_worker(_broker, stop_event=stop_event)
             )
-
-        await init_db()
         logger.info("api_started", host=config.API_HOST, port=config.API_PORT)
     else:
         from celerlite.broker.memory_broker import InMemoryBroker

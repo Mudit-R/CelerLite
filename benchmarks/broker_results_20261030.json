@@ -1,0 +1,13 @@
+{
+  "workload": "Redis broker reserve-and-ack; no user task execution or DB persistence",
+  "tasks": 10000,
+  "consumers": 10,
+  "completed_unique": 10000,
+  "missing": 0,
+  "duplicates": 0,
+  "seconds": 3.248,
+  "messages_per_second": 3079.1,
+  "python": "3.11.9",
+  "platform": "Windows-10-10.0.26300-SP0",
+  "redis_version": "7.4.12"
+}

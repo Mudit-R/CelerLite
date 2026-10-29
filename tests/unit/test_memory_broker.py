@@ -61,3 +61,39 @@ class TestInMemoryBroker:
         await broker.mark_task_revoked("rev-1")
         assert await broker.is_revoked("rev-1") is True
         await broker.disconnect()
+
+    async def test_retry_replaces_reservation_once_and_preserves_priority(self):
+        broker = InMemoryBroker(CelerLiteConfig())
+        await broker.enqueue('q', b'first', Priority.HIGH)
+        assert await broker.dequeue('q', 1) == b'first'
+        assert await broker.replace_reserved('q', b'first', b'retry', Priority.HIGH)
+        assert not await broker.replace_reserved('q', b'first', b'retry', Priority.HIGH)
+        assert (await broker.get_queue_length('q'))['high'] == 1
+        assert await broker.dequeue('q', 1) == b'retry'
+
+    async def test_recovery_and_rejection_preserve_priority(self):
+        broker = InMemoryBroker(CelerLiteConfig())
+        await broker.enqueue('q', b'critical', Priority.CRITICAL)
+        assert await broker.dequeue('q', 1) == b'critical'
+        assert await broker.recover_stale_tasks('q', 0) == 1
+        assert not await broker.replace_reserved('q', b'critical', b'retry', Priority.CRITICAL)
+        assert await broker.dequeue('q', 1) == b'critical'
+        await broker.reject('q', b'critical')
+        await broker.reject('q', b'unknown')
+        assert (await broker.get_queue_length('q'))['critical'] == 1
+        assert await broker.dequeue('q', 1) == b'critical'
+
+    async def test_indefinite_wait_and_cancellation(self):
+        import asyncio
+        broker = InMemoryBroker(CelerLiteConfig())
+        waiter = asyncio.create_task(broker.dequeue('q', 0))
+        await asyncio.sleep(0.01)
+        await broker.enqueue('q', b'arrived')
+        assert await asyncio.wait_for(waiter, 1) == b'arrived'
+        waiter = asyncio.create_task(broker.dequeue('q', 0))
+        await asyncio.sleep(0.01)
+        waiter.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await waiter
+        with pytest.raises(ValueError):
+            await broker.dequeue('q', -1)

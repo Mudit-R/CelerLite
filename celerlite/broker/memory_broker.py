@@ -91,8 +91,8 @@ class InMemoryBroker(BaseBroker):
                 Priority.LOW: deque(),
             }
         )
-        # queue_name -> dict of raw_message -> entry_time
-        self._processing: dict[str, dict[bytes, float]] = defaultdict(dict)
+        # queue_name -> raw_message -> (reservation time, original priority)
+        self._processing: dict[str, dict[bytes, tuple[float, Priority]]] = defaultdict(dict)
         # task_id -> (result_bytes, expiry_time)
         self._results: dict[str, tuple[bytes, float]] = {}
         # task_id -> expiry_time
@@ -126,18 +126,22 @@ class InMemoryBroker(BaseBroker):
         return queue_key
 
     async def dequeue(self, queue_name: str, timeout: int = 5) -> Optional[bytes]:
-        deadline = time.time() + timeout
-        while time.time() < deadline:
+        if timeout < 0:
+            raise ValueError('timeout must be non-negative')
+        deadline = time.monotonic() + timeout if timeout else None
+        while True:
             # Drain in strict priority order: CRITICAL -> HIGH -> NORMAL -> LOW
             for prio in [Priority.CRITICAL, Priority.HIGH, Priority.NORMAL, Priority.LOW]:
                 q = self._queues[queue_name][prio]
                 if q:
                     msg = q.popleft()
-                    self._processing[queue_name][msg] = time.time()
+                    self._processing[queue_name][msg] = (time.monotonic(), prio)
                     return msg
 
             # Wait for new items or timeout
-            remaining = max(0.01, deadline - time.time())
+            remaining = deadline - time.monotonic() if deadline is not None else 0.2
+            if remaining <= 0:
+                return None
             try:
                 await asyncio.wait_for(self._new_item_event.wait(), timeout=min(0.2, remaining))
                 self._new_item_event.clear()
@@ -150,9 +154,18 @@ class InMemoryBroker(BaseBroker):
         self._processing[queue_name].pop(raw_message, None)
 
     async def reject(self, queue_name: str, raw_message: bytes, requeue: bool = True) -> None:
-        await self.acknowledge(queue_name, raw_message)
-        if requeue:
-            await self.enqueue(queue_name, raw_message, priority=Priority.NORMAL)
+        reservation = self._processing[queue_name].pop(raw_message, None)
+        if requeue and reservation is not None:
+            await self.enqueue(queue_name, raw_message, priority=reservation[1])
+
+    async def replace_reserved(self, queue_name: str, raw_message: bytes,
+                               replacement: bytes, priority: int) -> bool:
+        """Replace a still-reserved task with its retry, without duplicating it."""
+        prio = Priority(priority)
+        if self._processing[queue_name].pop(raw_message, None) is None:
+            return False
+        await self.enqueue(queue_name, replacement, priority=prio)
+        return True
 
     async def store_result(self, task_id: str, result: bytes, ttl: int = 86400) -> None:
         self._results[task_id] = (result, time.time() + ttl)
@@ -197,17 +210,17 @@ class InMemoryBroker(BaseBroker):
             self._subscribers.discard(q)
 
     async def recover_stale_tasks(self, queue_name: str, timeout_seconds: int = 30) -> int:
-        now = time.time()
+        if timeout_seconds < 0:
+            raise ValueError('timeout_seconds must be non-negative')
+        now = time.monotonic()
         recovered = 0
-        stale_messages = []
-        for msg, entry_time in self._processing[queue_name].items():
-            if (now - entry_time) > timeout_seconds:
-                stale_messages.append(msg)
-
-        for msg in stale_messages:
+        stale_messages = [
+            (msg, priority) for msg, (entry_time, priority) in self._processing[queue_name].items()
+            if now - entry_time >= timeout_seconds
+        ]
+        for msg, priority in stale_messages:
             self._processing[queue_name].pop(msg, None)
-            # Requeue at normal priority
-            self._queues[queue_name][Priority.NORMAL].append(msg)
+            self._queues[queue_name][priority].append(msg)
             recovered += 1
 
         if recovered > 0:

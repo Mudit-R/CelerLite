@@ -6,7 +6,7 @@
 [![Redis](https://img.shields.io/badge/Redis-7.0+-DC382D?logo=redis&logoColor=white)](https://redis.io)
 [![PostgreSQL](https://img.shields.io/badge/PostgreSQL-15+-336791?logo=postgresql&logoColor=white)](https://postgresql.org)
 [![Docker](https://img.shields.io/badge/Docker-Compose-2496ED?logo=docker&logoColor=white)](https://docker.com)
-[![Tests](https://img.shields.io/badge/Tests-51%20Passed%20(100%25)-success?logo=pytest&logoColor=white)](tests/)
+[![Tests](https://img.shields.io/badge/Tests-local%20suite-success?logo=pytest&logoColor=white)](tests/)
 [![License](https://img.shields.io/badge/License-MIT-purple.svg)](LICENSE)
 
 > **Live Deployment**: [https://celerlite.onrender.com/](https://celerlite.onrender.com/)  
@@ -16,6 +16,11 @@
 ---
 
 ## Table of Contents
+
+**Reliability update (2026-10-30):** atomic Redis reservations/recovery, all-priority
+waiting, atomic retry replacement, and 12 real-Redis regression tests including process-death recovery.
+A local 10,000-message broker workload completed with zero missing or duplicate
+messages. See [measured results and delivery boundaries](docs/RELIABILITY.md).
 
 - [System Architecture](#system-architecture)
 - [Core Engineering Highlights](#core-engineering-highlights)
@@ -98,11 +103,11 @@ $$\text{delay} = \min(\text{backoff\_max},\ \text{backoff\_base}^{\text{retry}} 
 Task types can be rate-limited cluster-wide (e.g. `rate_limit="60/m"` for external APIs). The rate limiter uses Redis Sorted Sets (`ZREMRANGEBYSCORE`, `ZCARD`, `ZADD`) for sub-millisecond atomic sliding-window enforcement across all distributed nodes without requiring a centralized rate-limiting server.
 
 ### 5. High-Throughput Binary Serialization
-Supports both JSON and **MessagePack (`msgpack`)** serialization. Binary serialization yields a **2.8x speedup** in serialization/deserialization latency and a **45% reduction in Redis memory bandwidth**, allowing CelerLite to sustain over 1,500+ tasks/sec per worker pool.
+Supports both JSON and **MessagePack (`msgpack`)** serialization. JSON and MessagePack are available as serialization formats; comparative performance has not been established by the included broker benchmark.
 
 ### 6. Glassmorphic Real-Time Dashboard & Telemetry
 A native vanilla CSS/JS dashboard served directly by FastAPI:
-- Sub-millisecond WebSocket updates driven by Redis Pub/Sub.
+- WebSocket updates driven by broker events.
 - Live Chart.js throughput graphs & task status donut charts.
 - Worker fleet status table with real-time heartbeat health indicators.
 - Interactive DLQ explorer with instant replay and task deletion.
@@ -112,21 +117,9 @@ A native vanilla CSS/JS dashboard served directly by FastAPI:
 
 ## Performance & Benchmarks
 
-Benchmarks run on AMD Ryzen 7 8845HS / 16GB RAM / Redis 7 (Localhost):
-
-| Metric | CelerLite (msgpack) | CelerLite (json) | Celery (redis) | BullMQ (NodeJS) |
-|:---|:---:|:---:|:---:|:---:|
-| **Throughput (1 Worker)** | **1,840 tasks/sec** | 1,220 tasks/sec | 850 tasks/sec | 1,420 tasks/sec |
-| **Throughput (4 Workers)** | **6,450 tasks/sec** | 4,380 tasks/sec | 2,900 tasks/sec | 4,950 tasks/sec |
-| **P50 Latency** | **0.42 ms** | 0.68 ms | 1.15 ms | 0.58 ms |
-| **P95 Latency** | **1.10 ms** | 1.72 ms | 3.40 ms | 1.85 ms |
-| **P99 Latency** | **2.85 ms** | 4.10 ms | 8.20 ms | 4.60 ms |
-| **Payload Size (1KB Data)** | **412 bytes** | 1,024 bytes | 1,180 bytes | 1,040 bytes |
-
-Run the benchmark on your machine:
-```bash
-python benchmarks/throughput_benchmark.py
-```
+A local Redis broker reserve-and-ack workload and its environment are recorded in
+[reliability validation](docs/RELIABILITY.md). It does not measure end-to-end
+worker throughput, compare against other frameworks, or establish a latency SLA.
 
 ---
 

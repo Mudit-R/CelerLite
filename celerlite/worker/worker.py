@@ -132,8 +132,7 @@ class Worker:
         if message.eta:
             eta_ts = datetime.fromisoformat(message.eta).timestamp()
             if time.time() < eta_ts:
-                await self._broker.acknowledge("default", raw)
-                await self._broker.enqueue("default", raw, priority=message.priority)
+                await self._broker.reject("default", raw, requeue=True)
                 await asyncio.sleep(0.5)
                 return
 
@@ -234,12 +233,13 @@ class Worker:
             retry_count=message.retry_count,
         )
 
-        await self._broker.acknowledge("default", raw)
-
         if self._retry_policy.should_retry(message, error):
             retry_message = self._retry_policy.prepare_retry(message)
             retry_raw = Serializer.serialize(retry_message)
-            await self._broker.enqueue("default", retry_raw, priority=message.priority)
+            moved = await self._broker.replace_reserved("default", raw, retry_raw, message.priority)
+            if not moved:
+                logger.warning("retry_reservation_missing", task_id=message.task_id)
+                return
             await self._update_task_status(
                 message.task_id,
                 "RETRYING",
@@ -264,6 +264,7 @@ class Worker:
                 error_traceback=tb,
             )
             await self._save_to_dlq(dlq_data)
+            await self._broker.acknowledge("default", raw)
             metrics.record_dead_lettered()
             await self._broker.publish_event({
                 "event": "task_dead_lettered",
@@ -296,3 +297,4 @@ class Worker:
                 await session.commit()
         except Exception as e:
             logger.error("dlq_save_failed", error=str(e))
+            raise

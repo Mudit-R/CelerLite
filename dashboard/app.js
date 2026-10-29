@@ -109,6 +109,7 @@ async function loadAllCRMData() {
     loadContacts(),
     loadActivities(),
     loadEngineTasks(),
+    loadEngineStats(),
   ]);
 }
 
@@ -193,6 +194,22 @@ async function loadActivities() {
     if (currentTab === 'activities') renderActivitiesTimeline();
   } catch (err) {
     console.warn('Failed to load activities', err);
+  }
+}
+
+async function loadEngineStats() {
+  for (const [url, id, format] of [
+    ['/api/v1/workers/stats', 'engineWorkerCount', data => `${data.active} Workers`],
+    ['/api/v1/dlq/count', 'engineDLQCount', data => String(data.count)],
+  ]) {
+    try {
+      const response = await fetch(`${API}${url}`);
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      const element = document.getElementById(id);
+      if (element) element.textContent = format(await response.json());
+    } catch (error) {
+      console.warn(`Failed to load ${id}`, error);
+    }
   }
 }
 
@@ -1016,7 +1033,7 @@ async function handleStartTask(e) {
     task_name: document.getElementById('modalTaskName').value,
     queue: document.getElementById('modalTaskQueue').value,
     priority: parseInt(document.getElementById('modalTaskPriority').value),
-    args: ['manual_trigger'],
+    args: [],
   };
 
   try {
