@@ -17,7 +17,8 @@ import celerlite.api.routes.metrics as metrics_route_mod
 
 
 @pytest_asyncio.fixture
-async def test_app():
+async def test_app(monkeypatch):
+    monkeypatch.setattr('celerlite.config.config.AUTH_REQUIRED', False)
     # Setup in-memory SQLite database
     engine = create_async_engine("sqlite+aiosqlite:///:memory:", echo=False)
     async with engine.begin() as conn:

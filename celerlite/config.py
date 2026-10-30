@@ -38,6 +38,14 @@ class CelerLiteConfig(BaseSettings):
     API_HOST: str = "0.0.0.0"
     API_PORT: int = 8000
 
+    # Private, shared workspace authentication. All settings must be configured.
+    AUTH_REQUIRED: bool = True
+    SUPABASE_URL: str = ""
+    SUPABASE_PUBLISHABLE_KEY: str = ""
+    AUTH_ALLOWED_USER_IDS: str = ""
+    AUTH_PUBLIC_ORIGIN: str = ""
+    AUTH_COOKIE_SECURE: bool = True
+
     # Result TTL
     RESULT_TTL: int = 86400  # 24 hours
 

@@ -3,8 +3,8 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>CelerLite CRM | Salesforce Lightning Enterprise Platform</title>
-  <meta name="description" content="Salesforce Lightning Enterprise CRM & Distributed Execution Platform" />
+  <title>CelerLite | Workspace</title>
+  <meta name="description" content="A shared workspace for customer pipelines and task operations." />
 
   <!-- Fonts: Inter & JetBrains Mono -->
   <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -17,7 +17,31 @@
   <!-- Salesforce Lightning Design System (SLDS) Theme -->
   <link rel="stylesheet" href="/static/styles.css" />
 </head>
-<body class="slds-theme">
+<body class="slds-theme auth-pending">
+  <div id="authGate" class="auth-gate" aria-live="polite">
+    <div class="auth-shell">
+      <div class="auth-story">
+        <span class="auth-eyebrow">CELERLITE / PRIVATE WORKSPACE</span>
+        <h1>Keep your work<br />moving.</h1>
+        <p>One clear view of your customer pipeline and background operations.</p>
+        <div class="auth-features"><span>01 &nbsp; Customer pipeline</span><span>02 &nbsp; Task activity</span><span>03 &nbsp; Worker health</span></div>
+      </div>
+      <div class="auth-form-wrap">
+        <div class="auth-brand"><span class="auth-brand-mark">C</span><span>CelerLite</span></div>
+        <h2>Welcome back</h2>
+        <p>Sign in to your approved workspace account.</p>
+        <form id="authForm" class="auth-form">
+          <label for="authEmail">Email</label>
+          <input id="authEmail" type="email" autocomplete="username" required placeholder="you@company.com" />
+          <label for="authPassword">Password</label>
+          <input id="authPassword" type="password" autocomplete="current-password" required />
+          <p id="authError" class="auth-error" role="alert" hidden></p>
+          <button id="authSubmit" type="submit">Sign in <span aria-hidden="true">→</span></button>
+        </form>
+        <p class="auth-note">Access is limited to accounts approved by the workspace owner.</p>
+      </div>
+    </div>
+  </div>
 
   <!-- =========================================================================
        SALESFORCE GLOBAL UTILITY HEADER (SLDS Global Header)
@@ -39,8 +63,8 @@
           </svg>
         </div>
         <div class="slds-app-title">
-          <span class="slds-app-name">CelerLite CRM</span>
-          <span class="slds-cloud-badge">Enterprise Sales Cloud</span>
+          <span class="slds-app-name">CelerLite</span>
+          <span class="slds-cloud-badge">Workspace</span>
         </div>
       </div>
     </div>
@@ -64,6 +88,7 @@
         <span class="slds-pulse-dot" id="wsPulseDot"></span>
         <span class="slds-status-text" id="wsStatusText">Live CRM Engine</span>
       </div>
+      <button class="slds-btn slds-btn-neutral slds-btn-sm" id="authSignOut" type="button" hidden>Sign out</button>
 
       <!-- Quick Action Buttons -->
       <button class="slds-btn slds-btn-neutral slds-btn-sm" onclick="openNewLeadModal()">
@@ -77,9 +102,7 @@
       </button>
 
       <!-- User Avatar -->
-      <div class="slds-user-avatar" title="Alex Chen (Sales Director)">
-        <span>AC</span>
-      </div>
+      <div class="slds-user-avatar" title="Shared workspace"><span>CL</span></div>
     </div>
   </header>
 
@@ -169,7 +192,7 @@
         <div class="slds-kpi-card">
           <div class="kpi-label">Active Pipeline Value</div>
           <div class="kpi-value" id="kpiPipelineValue">$953,000</div>
-          <div class="kpi-subtext positive">Across 6 enterprise opportunities</div>
+          <div class="kpi-subtext positive">Open pipeline</div>
         </div>
         <div class="slds-kpi-card">
           <div class="kpi-label">Closed Won Revenue</div>

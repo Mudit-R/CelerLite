@@ -22,6 +22,11 @@ async def websocket_events(websocket: WebSocket):
     Streams real-time task lifecycle events to connected clients.
     Works seamlessly with both RedisBroker and InMemoryBroker.
     """
+    if config.AUTH_REQUIRED:
+        from celerlite.api.auth import COOKIE, valid_origin, verified_user
+        if not valid_origin(websocket.headers.get('origin')) or not await verified_user(websocket.cookies.get(COOKIE)):
+            await websocket.close(code=1008)
+            return
     await websocket.accept()
     logger.info("ws_client_connected", client=str(websocket.client))
 

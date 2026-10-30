@@ -29,7 +29,8 @@ async def crm_session():
 
 
 @pytest_asyncio.fixture
-async def crm_app():
+async def crm_app(monkeypatch):
+    monkeypatch.setattr('celerlite.config.config.AUTH_REQUIRED', False)
     engine = create_async_engine("sqlite+aiosqlite:///:memory:", echo=False)
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)

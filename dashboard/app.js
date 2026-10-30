@@ -29,9 +29,59 @@ let engineQueue = '';
 // INITIALIZATION
 // ==========================================================================
 
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', async () => {
   setupKeyboardShortcuts();
   initDefaultCloseDate();
+  const form = document.getElementById('authForm');
+  const error = document.getElementById('authError');
+  form.addEventListener('submit', async event => {
+    event.preventDefault();
+    error.hidden = true;
+    const button = document.getElementById('authSubmit');
+    button.disabled = true;
+    try {
+      const response = await fetch('/auth/login', {
+        method: 'POST', headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({email: document.getElementById('authEmail').value,
+                              password: document.getElementById('authPassword').value}),
+      });
+      document.getElementById('authPassword').value = '';
+      if (!response.ok) {
+        error.textContent = response.status === 503 ? 'Sign-in is temporarily unavailable. Contact the workspace owner.' : 'Sign-in failed. Check your credentials or ask the owner for access.';
+        error.hidden = false;
+        return;
+      }
+      window.location.reload();
+    } catch (_) {
+      document.getElementById('authPassword').value = '';
+      error.textContent = 'Could not reach the sign-in service. Please try again.';
+      error.hidden = false;
+    } finally { button.disabled = false; }
+  });
+  document.getElementById('authSignOut').addEventListener('click', async () => {
+    try {
+      const response = await fetch('/auth/logout', {method: 'POST'});
+      if (!response.ok) throw new Error('Sign-out failed');
+      window.location.reload();
+    } catch (_) { showToast('Could not sign out. Please try again.', 'error'); }
+  });
+  try {
+    const response = await fetch('/auth/session');
+    if (!response.ok) {
+      if (response.status !== 401) {
+        error.textContent = 'Sign-in is temporarily unavailable. Contact the workspace owner.';
+        error.hidden = false;
+      }
+      return;
+    }
+    const session = await response.json();
+    document.getElementById('authSignOut').hidden = Boolean(session.demo);
+    document.body.classList.remove('auth-pending');
+  } catch (_) {
+    error.textContent = 'Could not reach the sign-in service. Please reload the page.';
+    error.hidden = false;
+    return;
+  }
   loadAllCRMData();
 
   // Auto-refresh CRM stats every 5 seconds
@@ -44,6 +94,20 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }, 5000);
 });
+
+// When a session expires, hide the workspace immediately and request a new login.
+const nativeFetch = window.fetch.bind(window);
+window.fetch = async (...args) => {
+  const response = await nativeFetch(...args);
+  const url = typeof args[0] === 'string' ? args[0] : args[0].url;
+  if (response.status === 401 && new URL(url, location.href).pathname.startsWith('/api/v1/')) {
+    document.body.classList.add('auth-pending');
+    const error = document.getElementById('authError');
+    error.textContent = 'Your session has expired. Please sign in again.';
+    error.hidden = false;
+  }
+  return response;
+};
 
 function setupKeyboardShortcuts() {
   document.addEventListener('keydown', (e) => {

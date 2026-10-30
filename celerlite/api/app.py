@@ -102,7 +102,9 @@ async def lifespan(app: FastAPI):
 
 def create_app(serverless: bool = False) -> FastAPI:
     from celerlite.api.routes import crm, dlq, metrics, tasks, workers
+    from celerlite.api.auth import router as auth_router, verified_user, valid_origin, COOKIE
     from fastapi import Depends
+    from starlette.responses import JSONResponse
 
     is_serverless = (
         serverless
@@ -123,13 +125,20 @@ def create_app(serverless: bool = False) -> FastAPI:
         redoc_url="/redoc",
     )
 
-    app.add_middleware(
-        CORSMiddleware,
-        allow_origins=["*"],
-        allow_credentials=True,
-        allow_methods=["*"],
-        allow_headers=["*"],
-    )
+    @app.middleware('http')
+    async def protect_workspace(request, call_next):
+        if config.AUTH_REQUIRED and request.url.path.startswith('/api/v1/'):
+            if request.method not in ('GET', 'HEAD', 'OPTIONS') and not valid_origin(request.headers.get('origin')):
+                return JSONResponse({'detail': 'Invalid request origin'}, status_code=403)
+            if not await verified_user(request.cookies.get(COOKIE)):
+                return JSONResponse({'detail': 'Sign in required'}, status_code=401,
+                                    headers={'Cache-Control': 'no-store'})
+        result = await call_next(request)
+        if request.url.path.startswith('/api/v1/'):
+            result.headers['Cache-Control'] = 'no-store'
+        return result
+
+    app.include_router(auth_router)
 
     # REST routers
     app.include_router(crm.router, prefix="/api/v1/crm", tags=["CRM"])
@@ -156,9 +165,13 @@ def create_app(serverless: bool = False) -> FastAPI:
 
     def get_dashboard_path(filename: str = "index.html") -> str:
         for d in possible_dirs:
-            p = os.path.join(d, filename)
-            if os.path.isfile(p):
-                return p
+            root = os.path.realpath(d)
+            p = os.path.realpath(os.path.join(root, filename))
+            try:
+                if os.path.commonpath([root, p]) == root and os.path.isfile(p):
+                    return p
+            except ValueError:
+                continue
         return ""
 
     @app.get("/static/{file_path:path}", include_in_schema=False)
@@ -184,7 +197,7 @@ def create_app(serverless: bool = False) -> FastAPI:
         index_file = get_dashboard_path("index.html")
         if index_file and os.path.isfile(index_file):
             with open(index_file, "r", encoding="utf-8", errors="ignore") as f:
-                return HTMLResponse(content=f.read())
+                return HTMLResponse(content=f.read(), headers={'Cache-Control': 'no-store'})
         return HTMLResponse(content="<h1>CelerLite Console</h1><p>API Server is ONLINE. View docs at <a href='/docs'>/docs</a>.</p>")
 
     @app.get("/health")
