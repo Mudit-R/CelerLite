@@ -7,6 +7,15 @@ Auto-detects Redis & PostgreSQL, falling back to embedded mode if external servi
 
 import os
 import sys
+import tempfile
+
+# The existing public Render service is a disposable recruiter demo. Keep its
+# data isolated even if the service has database credentials configured.
+if os.environ.get('RENDER_EXTERNAL_HOSTNAME') == 'celerlite.onrender.com':
+    demo_dir = tempfile.mkdtemp(prefix='celerlite-demo-')
+    os.environ['CELERLITE_AUTH_REQUIRED'] = 'false'
+    os.environ['CELERLITE_DEMO_READ_ONLY'] = 'true'
+    os.environ['CELERLITE_DATABASE_URL'] = 'sqlite+aiosqlite:///' + os.path.join(demo_dir, 'demo.db')
 
 # Ensure UTF-8 output on Windows consoles
 if sys.platform == "win32":

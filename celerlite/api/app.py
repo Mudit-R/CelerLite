@@ -52,6 +52,8 @@ async def lifespan(app: FastAPI):
     if not is_serverless:
         embedded_mode = False
         try:
+            if config.DEMO_READ_ONLY and not config.AUTH_REQUIRED:
+                raise RuntimeError('Public demo uses the isolated in-memory broker')
             redis_broker = RedisBroker(config)
             await redis_broker.connect()
             _broker = redis_broker
