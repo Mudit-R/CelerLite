@@ -2402,6 +2402,12 @@ button.auth-google { width:100%; cursor:pointer; font:inherit; font-weight:700; 
 }
 
 /* CelerLite workspace */
+.insights-strip { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:14px; margin:0 0 22px; }
+.insights-strip > div { display:flex; flex-direction:column; gap:6px; padding:20px 22px; border:1px solid #e8eaf5; border-radius:16px; background:linear-gradient(145deg,#fff,#f9f9ff); }
+.insights-eyebrow { color:#716ac4; font-size:10px; font-weight:800; letter-spacing:.12em; }
+.insights-strip strong { color:#202844; font-size:24px; letter-spacing:-.04em; }
+.insights-strip small { color:#7e8a9c; font-size:12px; }
+@media (max-width:700px) { .insights-strip { grid-template-columns:1fr; } }
 [hidden] { display:none !important; }
 :root { --slds-brand:#4f46e5; --slds-brand-hover:#4338ca; --slds-text-primary:#17213a; --slds-text-muted:#748199; --slds-border:#e5eaf2; }
 body.slds-theme { background:#f4f6fb; font-size:14px; }

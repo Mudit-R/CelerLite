@@ -9,6 +9,7 @@ from urllib.parse import urlsplit
 from celerlite.config import config
 
 from celerlite.api.app import get_broker
+from celerlite.api.insights import pipeline_insights
 from celerlite.broker.redis_broker import RedisBroker
 from celerlite.broker.serializer import Serializer, TaskMessage
 from celerlite.persistence.crm_repository import CRMRepository
@@ -131,6 +132,13 @@ async def get_crm_stats():
     async with get_session() as session:
         repo = CRMRepository(session)
         return await repo.get_crm_stats()
+
+
+@router.get('/insights')
+async def get_pipeline_insights():
+    async with get_session() as session:
+        deals = await CRMRepository(session).list_deals(limit=200)
+        return pipeline_insights(deals)
 
 
 # --- Leads ---

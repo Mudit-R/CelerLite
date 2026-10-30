@@ -102,8 +102,8 @@
       <button class="slds-btn slds-btn-brand slds-btn-sm" onclick="openNewDealModal()">
         <span>+ Opportunity</span>
       </button>
-      <button class="slds-btn slds-btn-neutral slds-btn-sm" onclick="openAutomationModal()" title="Run AI Lead Scoring or Pipeline Automation">
-        <span>⚡ AI Automation</span>
+      <button class="slds-btn slds-btn-neutral slds-btn-sm" onclick="openAutomationModal()" title="Run lead scoring or pipeline automation">
+        <span>⚡ Automations</span>
       </button>
 
       <!-- User Avatar -->
@@ -220,6 +220,12 @@
           <div class="kpi-value" id="kpiTotalAccounts">5</div>
           <div class="kpi-subtext">Global strategic corporate tier</div>
         </div>
+      </div>
+
+      <div class="insights-strip" aria-label="Pipeline insights">
+        <div><span class="insights-eyebrow">PIPELINE HEALTH</span><strong id="insightsWeighted">Loading…</strong><small>Weighted value of open opportunities</small></div>
+        <div><span class="insights-eyebrow">NEEDS ATTENTION</span><strong id="insightsOverdue">—</strong><small>Past target close date</small></div>
+        <div><span class="insights-eyebrow">NEXT STEPS</span><strong id="insightsNextStep">—</strong><small>Open opportunities without a next step</small></div>
       </div>
 
       <!-- Charts & Opportunity Tables Grid -->
@@ -910,7 +916,7 @@
     </div>
   </div>
 
-  <!-- 6. AI Automation Modal -->
+  <!-- Workflow automation modal -->
   <div class="slds-modal-backdrop" id="modalAutomation">
     <div class="slds-modal-card">
       <div class="modal-card-header">
@@ -925,7 +931,7 @@
           <div class="automation-card" onclick="triggerAutomationAction('enrich_leads')">
             <div class="auto-icon bg-blue">🔍</div>
             <div class="auto-details">
-              <div class="auto-title">AI Lead Enrichment & Scoring</div>
+              <div class="auto-title">Lead Enrichment & Scoring</div>
               <div class="auto-desc">Runs distributed background scoring algorithms across all active leads.</div>
             </div>
             <button class="slds-btn slds-btn-brand slds-btn-sm">Execute</button>

@@ -234,6 +234,7 @@ async function loadAllCRMData() {
     loadEngineTasks(),
     loadEngineStats(),
   ]);
+  await loadPipelineInsights();
 }
 
 async function refreshCRMData() {
@@ -431,8 +432,22 @@ function updateKPICards() {
 
 function renderHomeView() {
   updateKPICards();
+  loadPipelineInsights();
   initOrUpdateCharts();
   renderHomeTopDeals();
+}
+
+async function loadPipelineInsights() {
+  try {
+    const response = await fetch(`${API}/api/v1/crm/insights`);
+    if (!response.ok) throw new Error('Insights unavailable');
+    const data = await response.json();
+    document.getElementById('insightsWeighted').textContent = `$${Number(data.weighted_pipeline).toLocaleString()}`;
+    document.getElementById('insightsOverdue').textContent = String(data.overdue_count);
+    document.getElementById('insightsNextStep').textContent = String(data.missing_next_step_count);
+  } catch (_) {
+    document.getElementById('insightsWeighted').textContent = 'Unavailable';
+  }
 }
 
 function renderHomeTopDeals() {
