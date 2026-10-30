@@ -1,5 +1,5 @@
 /* ==========================================================================
-   CelerLite CRM — Salesforce Lightning Enterprise Platform Controller
+   CelerLite CRM — CelerLite workspace Controller
    Full CRM State Management, Leads, Kanban Pipeline, Accounts, Contacts,
    Activity Timelines, AI Automations & CelerLite Engine Telemetry
    ========================================================================== */
@@ -87,7 +87,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (session.demo && !sessionStorage.getItem('celerlite-guest')) {
       const guestButton = document.getElementById('guestStart');
       guestButton.hidden = false;
-      document.querySelector('.auth-eyebrow').textContent = 'CELERLITE / RECRUITER DEMO';
+      document.querySelector('.auth-eyebrow').textContent = 'CELERLITE / DEMO WORKSPACE';
       document.querySelector('.auth-form-wrap h2').textContent = 'Explore CelerLite';
       document.querySelector('.auth-form-wrap > p').textContent = 'Try the workspace with sample data.';
       document.querySelector('.auth-note:last-child').hidden = true;
@@ -106,7 +106,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       document.body.classList.add('demo-read-only');
       const banner = document.createElement('div');
       banner.className = 'demo-banner';
-      banner.textContent = 'Recruiter demo · Sample data · Read-only';
+      banner.textContent = 'Demo workspace · Sample data · Read-only';
       document.body.prepend(banner);
     }
   } catch (_) {
