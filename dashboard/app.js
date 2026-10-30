@@ -445,6 +445,26 @@ async function loadPipelineInsights() {
     document.getElementById('insightsWeighted').textContent = `$${Number(data.weighted_pipeline).toLocaleString()}`;
     document.getElementById('insightsOverdue').textContent = String(data.overdue_count);
     document.getElementById('insightsNextStep').textContent = String(data.missing_next_step_count);
+    const list = document.getElementById('attentionList');
+    list.replaceChildren();
+    if (!data.attention.length) {
+      const empty = document.createElement('p');
+      empty.textContent = 'All open deals have a current target date and a next step.';
+      list.append(empty);
+    }
+    data.attention.forEach(item => {
+      const button = document.createElement('button');
+      button.className = 'attention-item';
+      const name = document.createElement('strong');
+      name.textContent = item.name;
+      const meta = document.createElement('span');
+      meta.textContent = `${item.account_name} · ${item.reason}`;
+      const value = document.createElement('b');
+      value.textContent = `$${Number(item.amount).toLocaleString()}`;
+      button.append(name, meta, value);
+      button.addEventListener('click', () => openDealDetailDrawer(item.id));
+      list.append(button);
+    });
   } catch (_) {
     document.getElementById('insightsWeighted').textContent = 'Unavailable';
   }
