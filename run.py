@@ -14,7 +14,7 @@ import tempfile
 if os.environ.get('RENDER_EXTERNAL_HOSTNAME') == 'celerlite.onrender.com':
     demo_dir = tempfile.mkdtemp(prefix='celerlite-demo-')
     os.environ['CELERLITE_AUTH_REQUIRED'] = 'false'
-    os.environ['CELERLITE_DEMO_READ_ONLY'] = 'true'
+    os.environ['CELERLITE_DEMO_READ_ONLY'] = 'false'
     os.environ['CELERLITE_DATABASE_URL'] = 'sqlite+aiosqlite:///' + os.path.join(demo_dir, 'demo.db')
 
 # Ensure UTF-8 output on Windows consoles

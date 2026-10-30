@@ -136,3 +136,14 @@ async def test_read_only_demo_blocks_api_writes(monkeypatch):
         response = await client.post('/api/v1/crm/leads', json={})
         assert response.status_code == 403 and response.json()['detail'] == 'This public demo is read-only'
         assert (await client.get('/api/v1/not-a-route')).status_code == 404
+
+
+def test_demo_rejects_markup_and_unsafe_websites(monkeypatch):
+    from pydantic import ValidationError
+    from celerlite.api.routes.crm import CreateLeadRequest, CreateAccountRequest
+    monkeypatch.setattr(config, 'AUTH_REQUIRED', False)
+    with pytest.raises(ValidationError):
+        CreateLeadRequest(first_name='<img>', last_name='Test', company='Demo', email='test@example.com')
+    with pytest.raises(ValidationError):
+        CreateAccountRequest(name='Demo', website='javascript:alert(1)')
+    assert CreateLeadRequest(first_name='Demo', last_name='User', company='Example', email='test@example.com').first_name == 'Demo'

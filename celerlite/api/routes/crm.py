@@ -4,7 +4,9 @@ import uuid
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
+from urllib.parse import urlsplit
+from celerlite.config import config
 
 from celerlite.api.app import get_broker
 from celerlite.broker.redis_broker import RedisBroker
@@ -15,7 +17,21 @@ from celerlite.persistence.database import get_session
 router = APIRouter()
 
 
-class CreateLeadRequest(BaseModel):
+class DemoSafeModel(BaseModel):
+    @field_validator('*', mode='before')
+    @classmethod
+    def validate_demo_text(cls, value, info):
+        if not config.AUTH_REQUIRED and isinstance(value, str):
+            if len(value) > 1000 or any(c in value for c in '<>\"\'&'):
+                raise ValueError('Demo text contains unsupported characters or is too long')
+            if info.field_name == 'website' and value:
+                url = urlsplit(value)
+                if url.scheme not in ('http', 'https') or not url.netloc:
+                    raise ValueError('Website must be an http or https URL')
+        return value
+
+
+class CreateLeadRequest(DemoSafeModel):
     first_name: str
     last_name: str
     company: str
@@ -30,7 +46,7 @@ class CreateLeadRequest(BaseModel):
     owner: str = "Alex Chen"
 
 
-class UpdateLeadRequest(BaseModel):
+class UpdateLeadRequest(DemoSafeModel):
     first_name: Optional[str] = None
     last_name: Optional[str] = None
     company: Optional[str] = None
@@ -45,7 +61,7 @@ class UpdateLeadRequest(BaseModel):
     owner: Optional[str] = None
 
 
-class CreateAccountRequest(BaseModel):
+class CreateAccountRequest(DemoSafeModel):
     name: str
     industry: str = "Technology"
     annual_revenue: int = 1000000
@@ -57,7 +73,7 @@ class CreateAccountRequest(BaseModel):
     tier: str = "Enterprise"
 
 
-class CreateContactRequest(BaseModel):
+class CreateContactRequest(DemoSafeModel):
     first_name: str
     last_name: str
     email: str
@@ -69,7 +85,7 @@ class CreateContactRequest(BaseModel):
     is_primary: bool = False
 
 
-class CreateDealRequest(BaseModel):
+class CreateDealRequest(DemoSafeModel):
     name: str
     account_name: str
     account_id: Optional[str] = None
@@ -82,7 +98,7 @@ class CreateDealRequest(BaseModel):
     next_step: Optional[str] = None
 
 
-class UpdateDealRequest(BaseModel):
+class UpdateDealRequest(DemoSafeModel):
     name: Optional[str] = None
     account_name: Optional[str] = None
     stage: Optional[str] = None
@@ -94,7 +110,7 @@ class UpdateDealRequest(BaseModel):
     next_step: Optional[str] = None
 
 
-class CreateActivityRequest(BaseModel):
+class CreateActivityRequest(DemoSafeModel):
     entity_type: str  # lead, deal, account, contact
     entity_id: str
     entity_name: Optional[str] = None

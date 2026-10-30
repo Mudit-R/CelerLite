@@ -102,11 +102,13 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
     document.getElementById('authSignOut').hidden = Boolean(session.demo);
     document.body.classList.remove('auth-pending');
-    if (session.demo && session.read_only) {
+    if (session.demo) {
+      if (session.read_only) {
       document.body.classList.add('demo-read-only');
+      }
       const banner = document.createElement('div');
       banner.className = 'demo-banner';
-      banner.textContent = 'Demo workspace · Sample data · Read-only';
+      banner.textContent = session.read_only ? 'Demo workspace · Sample data · Read-only' : 'Demo workspace · Shared sample data resets when the app restarts';
       document.body.prepend(banner);
     }
   } catch (_) {
