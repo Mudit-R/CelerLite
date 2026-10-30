@@ -30,14 +30,19 @@
         <div class="auth-brand"><span class="auth-brand-mark">C</span><span>CelerLite</span></div>
         <h2>Welcome back</h2>
         <p>Sign in to your approved workspace account.</p>
+        <button id="guestStart" class="auth-google" type="button" hidden>Explore the guest demo <span aria-hidden="true">→</span></button>
+        <p id="guestNote" class="auth-note" hidden>Demo data is shared and may reset. Please don't enter personal or sensitive information.</p>
+        <a class="auth-google" href="/auth/google/start"><span aria-hidden="true">G</span> Continue with Google</a>
+        <p id="authError" class="auth-error" role="alert" hidden></p>
+        <details class="auth-alternative"><summary>Sign in with email instead</summary>
         <form id="authForm" class="auth-form">
           <label for="authEmail">Email</label>
           <input id="authEmail" type="email" autocomplete="username" required placeholder="you@company.com" />
           <label for="authPassword">Password</label>
           <input id="authPassword" type="password" autocomplete="current-password" required />
-          <p id="authError" class="auth-error" role="alert" hidden></p>
           <button id="authSubmit" type="submit">Sign in <span aria-hidden="true">→</span></button>
         </form>
+        </details>
         <p class="auth-note">Access is limited to accounts approved by the workspace owner.</p>
       </div>
     </div>

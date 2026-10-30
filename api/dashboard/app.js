@@ -34,6 +34,12 @@ document.addEventListener('DOMContentLoaded', async () => {
   initDefaultCloseDate();
   const form = document.getElementById('authForm');
   const error = document.getElementById('authError');
+  const authError = new URLSearchParams(location.search).get('auth_error');
+  if (authError) {
+    error.textContent = authError === 'unapproved' ? 'This Google account is not approved for this workspace. Contact the owner.' : 'Google sign-in could not be completed. Please try again or contact the owner.';
+    error.hidden = false;
+    history.replaceState(null, '', location.pathname);
+  }
   form.addEventListener('submit', async event => {
     event.preventDefault();
     error.hidden = true;
@@ -75,6 +81,22 @@ document.addEventListener('DOMContentLoaded', async () => {
       return;
     }
     const session = await response.json();
+    if (session.demo && !sessionStorage.getItem('celerlite-guest')) {
+      const guestButton = document.getElementById('guestStart');
+      guestButton.hidden = false;
+      document.querySelector('.auth-eyebrow').textContent = 'CELERLITE / RECRUITER DEMO';
+      document.querySelector('.auth-form-wrap h2').textContent = 'Explore CelerLite';
+      document.querySelector('.auth-form-wrap > p').textContent = 'Try the workspace with sample data.';
+      document.querySelector('.auth-note:last-child').hidden = true;
+      document.querySelector('.auth-google[href]').hidden = true;
+      document.querySelector('.auth-alternative').hidden = true;
+      document.getElementById('guestNote').hidden = false;
+      guestButton.addEventListener('click', () => {
+        sessionStorage.setItem('celerlite-guest', '1');
+        window.location.reload();
+      });
+      return;
+    }
     document.getElementById('authSignOut').hidden = Boolean(session.demo);
     document.body.classList.remove('auth-pending');
   } catch (_) {

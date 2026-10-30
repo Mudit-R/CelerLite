@@ -4,18 +4,22 @@ Access is limited to explicit user IDs. This is a single shared workspace,
 not a multi-tenant CRM. Every protected request validates the session remotely.
 """
 import base64
+import hashlib
 import hmac
 import json
-from urllib.parse import urlsplit
+import secrets
+from urllib.parse import urlencode, urlsplit
 
 import httpx
 from fastapi import APIRouter, HTTPException, Request, Response
+from fastapi.responses import RedirectResponse
 from pydantic import BaseModel, Field
 
 from celerlite.config import config
 
 router = APIRouter(prefix='/auth', tags=['Authentication'])
 COOKIE = 'celerlite_session'
+PKCE_COOKIE = 'celerlite_pkce'
 
 
 class LoginRequest(BaseModel):
@@ -78,6 +82,56 @@ async def password_grant(email, password):
         return await client.post(config.SUPABASE_URL.rstrip('/') + '/auth/v1/token?grant_type=password',
             headers={'apikey': config.SUPABASE_PUBLISHABLE_KEY},
             json={'email': email, 'password': password})
+
+
+async def exchange_code(code, verifier):
+    async with httpx.AsyncClient(timeout=10.0, follow_redirects=False) as client:
+        return await client.post(config.SUPABASE_URL.rstrip('/') + '/auth/v1/token?grant_type=pkce',
+            headers={'apikey': config.SUPABASE_PUBLISHABLE_KEY},
+            json={'auth_code': code, 'code_verifier': verifier})
+
+
+@router.get('/google/start')
+async def google_start():
+    if not is_configured():
+        raise HTTPException(503, 'Sign-in is not configured')
+    verifier = secrets.token_urlsafe(48)
+    challenge = base64.urlsafe_b64encode(hashlib.sha256(verifier.encode()).digest()).rstrip(b'=').decode()
+    params = urlencode({'provider': 'google', 'redirect_to': config.AUTH_PUBLIC_ORIGIN + '/auth/google/callback',
+                        'code_challenge': challenge, 'code_challenge_method': 's256'})
+    response = RedirectResponse(config.SUPABASE_URL.rstrip('/') + '/auth/v1/authorize?' + params, status_code=302)
+    response.set_cookie(PKCE_COOKIE, verifier, max_age=300, httponly=True, secure=config.AUTH_COOKIE_SECURE,
+                        samesite='lax', path='/auth/google/callback')
+    response.headers['Cache-Control'] = 'no-store'
+    return response
+
+
+@router.get('/google/callback')
+async def google_callback(request: Request, code: str = ''):
+    response = RedirectResponse('/?auth_error=failed', status_code=303)
+    response.headers['Cache-Control'] = 'no-store'
+    response.headers['Referrer-Policy'] = 'no-referrer'
+    response.delete_cookie(PKCE_COOKIE, path='/auth/google/callback', secure=config.AUTH_COOKIE_SECURE,
+                           httponly=True, samesite='lax')
+    verifier = request.cookies.get(PKCE_COOKIE)
+    if not is_configured() or not code or not verifier or len(code) > 4096 or len(verifier) > 128:
+        return response
+    try:
+        result = await exchange_code(code, verifier)
+        if result.status_code != 200:
+            return response
+        payload = result.json()
+        token = payload.get('access_token')
+        if not await verified_user(token):
+            response.headers['location'] = '/?auth_error=unapproved'
+            return response
+        ttl = min(max(int(payload.get('expires_in', 3600)), 1), 3600)
+        response.set_cookie(COOKIE, token, max_age=ttl, httponly=True, secure=config.AUTH_COOKIE_SECURE,
+                            samesite='strict', path='/')
+        response.headers['location'] = '/'
+    except (httpx.HTTPError, ValueError, TypeError):
+        pass
+    return response
 
 
 @router.post('/login')

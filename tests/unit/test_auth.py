@@ -1,5 +1,8 @@
 """Authentication boundaries for the private workspace."""
 from unittest.mock import AsyncMock
+from urllib.parse import parse_qs, urlsplit
+import base64
+import hashlib
 
 import httpx
 import pytest
@@ -95,3 +98,30 @@ def test_websocket_rejects_unauthenticated_clients(auth_config, monkeypatch):
     with pytest.raises(WebSocketDisconnect):
         with client.websocket_connect('/api/v1/ws/events', headers={'Origin': 'http://localhost'}):
             pass
+
+
+async def test_google_pkce_login_and_allowlist(auth_config, monkeypatch):
+    exchange = AsyncMock(return_value=httpx.Response(200, json={'access_token': 'valid', 'expires_in': 3600}))
+    monkeypatch.setattr(auth, 'exchange_code', exchange)
+    verify = AsyncMock(return_value={'id': 'approved-id'})
+    monkeypatch.setattr(auth, 'verified_user', verify)
+    async with AsyncClient(transport=ASGITransport(app=create_app()), base_url='http://localhost') as client:
+        start = await client.get('/auth/google/start')
+        params = parse_qs(urlsplit(start.headers['location']).query)
+        verifier = client.cookies.get(auth.PKCE_COOKIE)
+        challenge = base64.urlsafe_b64encode(hashlib.sha256(verifier.encode()).digest()).rstrip(b'=').decode()
+        assert params['provider'] == ['google'] and params['code_challenge'] == [challenge]
+        assert params['redirect_to'] == ['http://localhost/auth/google/callback']
+        assert 'HttpOnly' in start.headers['set-cookie'] and 'SameSite=lax' in start.headers['set-cookie']
+        result = await client.get('/auth/google/callback?code=one-time-code')
+        assert result.headers['location'] == '/' and client.cookies.get(auth.COOKIE) == 'valid'
+        exchange.assert_awaited_once_with('one-time-code', verifier)
+        assert auth.PKCE_COOKIE not in client.cookies
+        client.cookies.clear()
+        result = await client.get('/auth/google/callback?code=one-time-code')
+        assert result.headers['location'] == '/?auth_error=failed'
+        assert exchange.await_count == 1
+        await client.get('/auth/google/start')
+        verify.return_value = None
+        result = await client.get('/auth/google/callback?code=other')
+        assert result.headers['location'] == '/?auth_error=unapproved' and auth.COOKIE not in client.cookies
