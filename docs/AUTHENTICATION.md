@@ -43,12 +43,11 @@ explicitly disable auth only in their isolated fixtures. The authentication suit
 checks fail-closed configuration, allowlisted and confirmed identities, origin
 checks, HttpOnly cookies, protected API requests, and unauthenticated WebSockets.
 
-For a recruiter demo, deploy a **separate instance** with
-`CELERLITE_AUTH_REQUIRED=false` and its own disposable database and broker,
-containing synthetic data only. The guest button is a convenience screen, not
-an access control: all demo APIs remain public and visitors share and can change
-the demo data. Do not point the demo at a private workspace's database or broker.
-Provision resets and abuse controls before publishing its URL.
+For a public recruiter demo, use `CELERLITE_AUTH_REQUIRED=false` and
+`CELERLITE_DEMO_READ_ONLY=true`, with a disposable database and broker containing
+synthetic data only. The guest button is a convenience screen, not access
+control. API reads and the event stream are public; mutation requests are denied
+in read-only mode. Do not connect a demo to private data or a private broker.
 
 Before deploying, configure and test an approved account and the environment on
 the hosting provider. Deploying this code without configuration will lock the

@@ -125,3 +125,14 @@ async def test_google_pkce_login_and_allowlist(auth_config, monkeypatch):
         verify.return_value = None
         result = await client.get('/auth/google/callback?code=other')
         assert result.headers['location'] == '/?auth_error=unapproved' and auth.COOKIE not in client.cookies
+
+
+async def test_read_only_demo_blocks_api_writes(monkeypatch):
+    monkeypatch.setattr(config, 'AUTH_REQUIRED', False)
+    monkeypatch.setattr(config, 'DEMO_READ_ONLY', True)
+    async with AsyncClient(transport=ASGITransport(app=create_app()), base_url='http://localhost') as client:
+        session = await client.get('/auth/session')
+        assert session.json()['read_only'] is True
+        response = await client.post('/api/v1/crm/leads', json={})
+        assert response.status_code == 403 and response.json()['detail'] == 'This public demo is read-only'
+        assert (await client.get('/api/v1/not-a-route')).status_code == 404

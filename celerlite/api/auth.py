@@ -162,7 +162,7 @@ async def login(body: LoginRequest, request: Request, response: Response):
 async def session(request: Request, response: Response):
     response.headers['Cache-Control'] = 'no-store'
     if not config.AUTH_REQUIRED:
-        return {'user': {'email': 'Local demo'}, 'demo': True}
+        return {'user': {'email': 'Guest demo'}, 'demo': True, 'read_only': config.DEMO_READ_ONLY}
     if not is_configured():
         raise HTTPException(503, 'Sign-in is not configured')
     user = await verified_user(request.cookies.get(COOKIE))

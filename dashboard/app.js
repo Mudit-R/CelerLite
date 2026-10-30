@@ -81,6 +81,9 @@ document.addEventListener('DOMContentLoaded', async () => {
       return;
     }
     const session = await response.json();
+    if (session.demo && session.read_only) {
+      document.getElementById('guestNote').textContent = 'Explore sample data in this read-only demo. Changes are disabled.';
+    }
     if (session.demo && !sessionStorage.getItem('celerlite-guest')) {
       const guestButton = document.getElementById('guestStart');
       guestButton.hidden = false;
@@ -99,6 +102,12 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
     document.getElementById('authSignOut').hidden = Boolean(session.demo);
     document.body.classList.remove('auth-pending');
+    if (session.demo && session.read_only) {
+      const banner = document.createElement('div');
+      banner.className = 'demo-banner';
+      banner.textContent = 'Recruiter demo · Sample data · Read-only';
+      document.body.prepend(banner);
+    }
   } catch (_) {
     error.textContent = 'Could not reach the sign-in service. Please reload the page.';
     error.hidden = false;

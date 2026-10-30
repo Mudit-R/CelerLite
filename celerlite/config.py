@@ -40,6 +40,7 @@ class CelerLiteConfig(BaseSettings):
 
     # Private, shared workspace authentication. All settings must be configured.
     AUTH_REQUIRED: bool = True
+    DEMO_READ_ONLY: bool = False
     SUPABASE_URL: str = ""
     SUPABASE_PUBLISHABLE_KEY: str = ""
     AUTH_ALLOWED_USER_IDS: str = ""

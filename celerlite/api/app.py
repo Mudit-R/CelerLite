@@ -127,6 +127,10 @@ def create_app(serverless: bool = False) -> FastAPI:
 
     @app.middleware('http')
     async def protect_workspace(request, call_next):
+        if (config.DEMO_READ_ONLY and request.url.path.startswith('/api/v1/')
+                and request.method not in ('GET', 'HEAD', 'OPTIONS')):
+            return JSONResponse({'detail': 'This public demo is read-only'}, status_code=403,
+                                headers={'Cache-Control': 'no-store'})
         if config.AUTH_REQUIRED and request.url.path.startswith('/api/v1/'):
             if request.method not in ('GET', 'HEAD', 'OPTIONS') and not valid_origin(request.headers.get('origin')):
                 return JSONResponse({'detail': 'Invalid request origin'}, status_code=403)
