@@ -2401,3 +2401,49 @@ button.auth-google { width:100%; cursor:pointer; font:inherit; font-weight:700; 
   }
 }
 
+/* CelerLite workspace */
+[hidden] { display:none !important; }
+:root { --slds-brand:#4f46e5; --slds-brand-hover:#4338ca; --slds-text-primary:#17213a; --slds-text-muted:#748199; --slds-border:#e5eaf2; }
+body.slds-theme { background:#f4f6fb; font-size:14px; }
+.slds-global-header { height:72px; padding:0 30px; background:#fff; color:#1c2940; border-bottom:1px solid #e9edf5; box-shadow:none; }
+.slds-app-launcher { display:none; }
+.slds-cloud-icon { border-radius:12px; background:#4f46e5; box-shadow:0 5px 12px #4f46e530; }
+.slds-app-name { color:#1b2640; font-size:18px; letter-spacing:-.04em; }
+.slds-cloud-badge { color:#8491a4; }
+.slds-search-box { border:1px solid #e5eaf2; border-radius:10px; background:#f7f8fc; }
+.slds-global-search { max-width:380px; }
+.slds-global-header-right { gap:10px; }
+.slds-global-header .slds-btn-neutral { background:#f5f6fb; color:#39485f; border-color:#e5eaf2; }
+.slds-user-avatar { background:#eeecff; color:#4f46e5; }
+.slds-cluster-indicator { background:#ecfdf5; color:#087b59; border:1px solid #ccf3e2; border-radius:30px; }
+.slds-nav-bar { background:#fff; border-bottom:1px solid #e9edf5; box-shadow:none; padding:0 30px; }
+.slds-nav-tabs { gap:4px; }
+.slds-nav-item { padding:16px 14px; color:#728096; font-size:13px; border-bottom:2px solid transparent; }
+.slds-nav-item:hover { color:#4f46e5; background:#f8f8ff; }
+.slds-nav-item.active { color:#4f46e5; border-color:#4f46e5; background:transparent; }
+.tab-link { gap:9px; }
+.slds-main-content { max-width:1530px; padding:32px; }
+.slds-page-header { padding:28px 30px; margin-bottom:22px; border-radius:18px; background:linear-gradient(115deg,#fff 40%,#f2f0ff); }
+.slds-page-header-title { font-size:25px; line-height:1.2; letter-spacing:-.035em; }
+.slds-text-overline { color:#6d69c9; font-size:10px; letter-spacing:.12em; }
+.workspace-intro { margin-top:7px; color:#7a8799; font-size:13px; }
+.slds-page-icon { width:46px; height:46px; border-radius:14px; }
+.slds-kpi-grid { gap:16px; margin:0 0 22px; grid-template-columns:repeat(5,minmax(0,1fr)); }
+.slds-kpi-card { min-height:125px; padding:22px; border-radius:16px; background:#fff; }
+.kpi-label { color:#7a8799; text-transform:none; letter-spacing:0; font-size:12px; font-weight:600; }
+.kpi-value { margin:12px 0 7px; font-size:27px; letter-spacing:-.04em; }
+.kpi-subtext { color:#8e9aad; }
+.slds-card { border-radius:16px; }
+.slds-card-header { background:#fff; padding:20px 22px; border-bottom:1px solid #edf0f6; }
+.slds-card-title { font-size:15px; letter-spacing:-.02em; }
+.slds-card-body { padding:20px 22px; }
+.slds-btn { border-radius:9px; font-weight:600; }
+.slds-btn-brand { background:#4f46e5; border-color:#4f46e5; }
+.slds-btn-brand:hover { background:#4338ca; }
+.slds-table th { color:#8994a5; font-size:11px; letter-spacing:.05em; }
+.slds-table td { padding-top:15px; padding-bottom:15px; }
+.demo-banner { background:#eeedff; color:#5144b4; }
+.demo-read-only [onclick^="openNew"], .demo-read-only [onclick^="openAutomation"], .demo-read-only [onclick^="openStartTask"], .demo-read-only [onclick^="convertLead"], .demo-read-only [onclick^="deleteLead"], .demo-read-only [onclick^="toggleActivityStatus"] { display:none !important; }
+@media (max-width:900px) { .slds-global-header { padding:0 16px; gap:14px; } .slds-global-header-right .slds-btn:not(#authSignOut), .slds-cluster-indicator { display:none; } .slds-nav-bar { padding:0 12px; } .slds-main-content { padding:20px; } .slds-kpi-grid { grid-template-columns:repeat(3,minmax(0,1fr)); } }
+@media (max-width:600px) { .slds-global-header { height:64px; } .slds-global-search { display:block; flex:1; min-width:0; margin:0; } .slds-app-title .slds-cloud-badge, .search-shortcut, .slds-user-avatar { display:none; } .slds-main-content { padding:16px; } .slds-page-header { padding:20px; } .slds-page-header-title { font-size:21px; } .slds-kpi-grid { grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px; } .slds-kpi-card { min-height:110px; padding:16px; } .kpi-value { font-size:22px; } }
+

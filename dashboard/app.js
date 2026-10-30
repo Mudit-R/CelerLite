@@ -103,6 +103,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     document.getElementById('authSignOut').hidden = Boolean(session.demo);
     document.body.classList.remove('auth-pending');
     if (session.demo && session.read_only) {
+      document.body.classList.add('demo-read-only');
       const banner = document.createElement('div');
       banner.className = 'demo-banner';
       banner.textContent = 'Recruiter demo · Sample data · Read-only';
@@ -141,6 +142,16 @@ window.fetch = async (...args) => {
 };
 
 function setupKeyboardShortcuts() {
+  document.querySelectorAll('.slds-nav-item').forEach(item => {
+    item.tabIndex = 0;
+    item.setAttribute('role', 'button');
+    item.addEventListener('keydown', event => {
+      if (event.key === 'Enter' || event.key === ' ') {
+        event.preventDefault();
+        switchTab(item.dataset.tab);
+      }
+    });
+  });
   document.addEventListener('keydown', (e) => {
     // ESC closes drawer or any open modal
     if (e.key === 'Escape') {
@@ -173,10 +184,14 @@ function initDefaultCloseDate() {
 
 function switchTab(tabId) {
   currentTab = tabId;
+  const search = document.getElementById('globalSearchInput');
+  const searchable = ['leads', 'deals', 'accounts', 'contacts'].includes(tabId);
+  search.placeholder = searchable ? `Search ${tabId}...` : 'Search leads, deals, accounts or contacts';
 
   // Update Nav Items
   document.querySelectorAll('.slds-nav-item').forEach(item => {
     item.classList.toggle('active', item.getAttribute('data-tab') === tabId);
+    item.setAttribute('aria-current', item.getAttribute('data-tab') === tabId ? 'page' : 'false');
   });
 
   // Update Views
@@ -616,7 +631,9 @@ function renderKanbanBoard() {
 
     if (!container) return;
 
-    const dealsInStage = dealsList.filter(d => d.stage === stage);
+    const query = currentSearch.trim().toLowerCase();
+    const dealsInStage = dealsList.filter(d => d.stage === stage &&
+      (!query || [d.name, d.account_name, d.owner].some(v => String(v || '').toLowerCase().includes(query))));
     const sumAmount = dealsInStage.reduce((sum, d) => sum + (d.amount || 0), 0);
 
     if (countEl) countEl.textContent = `${dealsInStage.length} Deals`;
@@ -652,12 +669,14 @@ function renderAccountsTable() {
   const tbody = document.getElementById('accountsTableBody');
   if (!tbody) return;
 
-  if (accountsList.length === 0) {
+  const query = currentSearch.trim().toLowerCase();
+  const visible = accountsList.filter(a => !query || [a.name, a.industry, a.billing_city].some(v => String(v || '').toLowerCase().includes(query)));
+  if (visible.length === 0) {
     tbody.innerHTML = '<tr><td colspan="8" class="text-center py-4 text-muted">No accounts registered yet.</td></tr>';
     return;
   }
 
-  tbody.innerHTML = accountsList.map(a => `
+  tbody.innerHTML = visible.map(a => `
     <tr>
       <td class="font-semibold text-brand">${a.name}</td>
       <td><span class="badge-neutral">${a.industry}</span></td>
@@ -675,12 +694,14 @@ function renderContactsTable() {
   const tbody = document.getElementById('contactsTableBody');
   if (!tbody) return;
 
-  if (contactsList.length === 0) {
+  const query = currentSearch.trim().toLowerCase();
+  const visible = contactsList.filter(c => !query || [c.first_name, c.last_name, c.account_name, c.email].some(v => String(v || '').toLowerCase().includes(query)));
+  if (visible.length === 0) {
     tbody.innerHTML = '<tr><td colspan="7" class="text-center py-4 text-muted">No contacts registered yet.</td></tr>';
     return;
   }
 
-  tbody.innerHTML = contactsList.map(c => `
+  tbody.innerHTML = visible.map(c => `
     <tr>
       <td class="font-semibold text-brand">${c.first_name} ${c.last_name}</td>
       <td class="font-medium">${c.account_name || '—'}</td>
@@ -1249,10 +1270,17 @@ async function refreshTaskInspector() {
 
 function handleGlobalSearch(val) {
   currentSearch = val;
+  if (val.trim() && !['leads', 'deals', 'accounts', 'contacts'].includes(currentTab)) {
+    switchTab('leads');
+  }
   if (currentTab === 'leads') {
     renderLeadsTable();
   } else if (currentTab === 'deals') {
     renderKanbanBoard();
+  } else if (currentTab === 'accounts') {
+    renderAccountsTable();
+  } else if (currentTab === 'contacts') {
+    renderContactsTable();
   }
 }
 
