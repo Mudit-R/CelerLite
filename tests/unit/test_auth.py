@@ -181,6 +181,17 @@ def test_demo_database_isolation_survives_private_postgres_fallback(monkeypatch)
     assert db_mod.demo_database_isolated() is False
 
 
+def test_standard_database_urls_are_normalized_to_async_drivers():
+    from celerlite.persistence.database import _normalize_async_url
+
+    assert _normalize_async_url('postgres://app:secret@db.example.test/celerlite') == (
+        'postgresql+asyncpg://app:secret@db.example.test/celerlite'
+    )
+    assert _normalize_async_url('sqlite:///./celerlite.db') == (
+        'sqlite+aiosqlite:///./celerlite.db'
+    )
+
+
 def test_demo_start_rate_limit_is_bounded_and_expires(monkeypatch):
     auth._demo_attempts.clear()
     monkeypatch.setattr(auth.time, "monotonic", lambda: 100.0)

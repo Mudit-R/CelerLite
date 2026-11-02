@@ -149,6 +149,8 @@ document.addEventListener('DOMContentLoaded', async () => {
       document.getElementById('tab-engine')?.setAttribute('hidden', '');
       const liveStatus = document.getElementById('wsStatusText');
       if (liveStatus) liveStatus.textContent = 'Sample workspace';
+    } else {
+      updateServiceStatus();
     }
   } catch (_) {
     error.textContent = 'Could not reach the sign-in service. Please reload the page.';
@@ -167,6 +169,28 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
   }, 5000);
 });
+
+async function updateServiceStatus() {
+  const pill = document.getElementById('clusterStatusPill');
+  const label = document.getElementById('wsStatusText');
+  if (!pill || !label) return;
+  try {
+    const response = await fetch('/health');
+    const health = await response.json();
+    const databaseIsTemporary = health.database?.dialect === 'sqlite';
+    const queueIsTemporary = /memory/i.test(String(health.broker?.mode || ''));
+    const temporary = databaseIsTemporary || queueIsTemporary;
+    label.textContent = temporary ? 'Temporary mode' : 'Services online';
+    pill.classList.toggle('service-temporary', temporary);
+    pill.title = temporary
+      ? 'This hosted workspace uses local SQLite or an in-memory queue. Records or queued work may be lost when the service restarts.'
+      : 'Database and task queue are connected.';
+    pill.setAttribute('aria-label', pill.title);
+  } catch (_) {
+    label.textContent = 'Status unavailable';
+    pill.title = 'Could not check database and task queue health.';
+  }
+}
 
 // When a session expires, hide the workspace immediately and request a new login.
 const nativeFetch = window.fetch.bind(window);

@@ -20,7 +20,19 @@ from celerlite.persistence.models import Base
 logger = get_logger(__name__)
 
 
+def _normalize_async_url(url: str) -> str:
+    """Select the async SQLAlchemy driver for common Postgres/SQLite URLs."""
+    parsed = make_url(url)
+    backend = parsed.get_backend_name()
+    if backend in ("postgres", "postgresql") and parsed.drivername != "postgresql+asyncpg":
+        parsed = parsed.set(drivername="postgresql+asyncpg")
+    elif backend == "sqlite" and parsed.drivername == "sqlite":
+        parsed = parsed.set(drivername="sqlite+aiosqlite")
+    return parsed.render_as_string(hide_password=False)
+
+
 def _create_engine(url: str):
+    url = _normalize_async_url(url)
     if "sqlite" in url:
         return create_async_engine(url, poolclass=NullPool, echo=False)
     return create_async_engine(
@@ -48,7 +60,7 @@ def _get_initial_db_url() -> str:
     return config.DATABASE_URL
 
 
-_initial_db_url = _get_initial_db_url()
+_initial_db_url = _normalize_async_url(_get_initial_db_url())
 
 engine = _create_engine(_initial_db_url)
 AsyncSessionLocal = async_sessionmaker(

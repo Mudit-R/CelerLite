@@ -2813,6 +2813,8 @@ button { -webkit-tap-highlight-color: transparent; }
 .auth-form button:hover { background: #066b4d; }
 .auth-error { border: 1px solid #f1c7c2; border-radius: 8px; }
 .demo-banner { color: #22563b; background: #e9f5ec; border-bottom: 1px solid #d6e9db; }
+.slds-cluster-indicator.service-temporary { color:#79520c; background:#fff6df; border-color:#ead7a7; }
+.slds-cluster-indicator.service-temporary .slds-pulse-dot { background:#d39a22; box-shadow:0 0 0 3px rgba(211,154,34,.14); }
 .auth-divider { display:flex; align-items:center; gap:12px; margin:20px 0 4px; color:#91a097; font-size:11px; }
 .auth-divider::before, .auth-divider::after { content:""; flex:1; height:1px; background:#e8eee9; }
 .auth-demo-cta { display:flex; justify-content:center; align-items:center; gap:6px; margin-top:26px; color:#849189; font-size:12px; }

@@ -66,7 +66,8 @@ approved identities; the CRM database stores workspace records. If
 to local SQLite. Free Render instances do not provide a persistent disk, so CRM
 records may be lost when the instance is replaced or restarted. Use a separately
 configured durable database for records that must survive restarts; keep its URL
-in Render environment variables, never in source control.
+in Render environment variables, never in source control. Standard `postgres://`
+and `postgresql://` URLs are normalized to the installed asyncpg driver.
 
 Before deploying, configure and test an approved account and the environment on
 the hosting provider. If Supabase settings are missing, private login fails
