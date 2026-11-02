@@ -21,20 +21,18 @@
   <div id="authGate" class="auth-gate" aria-live="polite">
     <div class="auth-shell">
       <div class="auth-story">
-        <span class="auth-eyebrow">CELERLITE / PRIVATE WORKSPACE</span>
-        <h1>Keep your work<br />moving.</h1>
-        <p>One clear view of your customer pipeline and background operations.</p>
-        <div class="auth-features"><span>01 &nbsp; Customer pipeline</span><span>02 &nbsp; Task activity</span><span>03 &nbsp; Worker health</span></div>
+        <span class="auth-eyebrow">CELERLITE / WORKFLOW CONSOLE</span>
+        <h1>Give every task<br />a reliable path.</h1>
+        <p>Keep customer work and background operations moving from one calm, clear workspace.</p>
+        <div class="auth-features"><span>01 &nbsp; Customer pipeline</span><span>02 &nbsp; Background workflows</span><span>03 &nbsp; Queue and worker health</span></div>
       </div>
       <div class="auth-form-wrap">
         <div class="auth-brand"><span class="auth-brand-mark">C</span><span>CelerLite</span></div>
-        <h2>Welcome back</h2>
-        <p>Sign in to your approved workspace account.</p>
-        <button id="guestStart" class="auth-google" type="button" hidden>Explore the guest demo <span aria-hidden="true">→</span></button>
-        <p id="guestNote" class="auth-note" hidden>Demo data is shared and may reset. Please don't enter personal or sensitive information.</p>
-        <a class="auth-google" href="/auth/google/start"><span aria-hidden="true">G</span> Continue with Google</a>
+        <h2>Sign in to your workspace</h2>
+        <p>Access your customer workflows and task operations.</p>
+        <a class="auth-google" data-auth-google href="/auth/google/start"><span aria-hidden="true">G</span> Continue with Google</a>
+        <div class="auth-divider"><span>or use email</span></div>
         <p id="authError" class="auth-error" role="alert" hidden></p>
-        <details class="auth-alternative"><summary>Sign in with email instead</summary>
         <form id="authForm" class="auth-form">
           <label for="authEmail">Email</label>
           <input id="authEmail" type="email" autocomplete="username" required placeholder="you@company.com" />
@@ -42,8 +40,12 @@
           <input id="authPassword" type="password" autocomplete="current-password" required />
           <button id="authSubmit" type="submit">Sign in <span aria-hidden="true">→</span></button>
         </form>
-        </details>
-        <p class="auth-note">Access is limited to accounts approved by the workspace owner.</p>
+        <p class="auth-note">Workspace access is limited to accounts approved by the owner.</p>
+        <div class="auth-demo-cta">
+          <span>Just looking around?</span>
+          <button id="guestStart" class="auth-demo-link" type="button" hidden>Preview the demo <span aria-hidden="true">→</span></button>
+        </div>
+        <p id="guestNote" class="auth-demo-note" hidden>Isolated sample workspace · read-only · no account required.</p>
       </div>
     </div>
   </div>
@@ -924,35 +926,35 @@
   <div class="slds-modal-backdrop" id="modalAutomation">
     <div class="slds-modal-card">
       <div class="modal-card-header">
-        <h3 class="modal-title">Trigger CelerLite CRM Automation</h3>
+        <h3 class="modal-title">Run a CRM workflow</h3>
         <button class="modal-close-btn" onclick="closeModal('modalAutomation')">×</button>
       </div>
       <div class="modal-card-body">
         <p class="mb-3 text-secondary">
-          Run high-throughput asynchronous CRM jobs via CelerLite's distributed task queue engine:
+          Each run is queued, executed by a worker, and saved with an inspectable result.
         </p>
         <div class="automation-action-list">
-          <div class="automation-card" onclick="triggerAutomationAction('enrich_leads')">
+          <div class="automation-card" onclick="triggerAutomationAction('score_leads')">
             <div class="auto-icon bg-blue">🔍</div>
             <div class="auto-details">
-              <div class="auto-title">Lead Enrichment & Scoring</div>
-              <div class="auto-desc">Runs distributed background scoring algorithms across all active leads.</div>
+            <div class="auto-title">Score active leads</div>
+            <div class="auto-desc">Apply a transparent fit rubric using revenue, seniority, source, and profile completeness.</div>
             </div>
             <button class="slds-btn slds-btn-brand slds-btn-sm">Execute</button>
           </div>
-          <div class="automation-card" onclick="triggerAutomationAction('calculate_deal_probabilities')">
+          <div class="automation-card" onclick="triggerAutomationAction('pipeline_forecast')">
             <div class="auto-icon bg-green">📈</div>
             <div class="auto-details">
-              <div class="auto-title">Recalculate Opportunity Win Probabilities</div>
-              <div class="auto-desc">Analyzes stage duration and activity velocity to update pipeline forecasts.</div>
+            <div class="auto-title">Build a pipeline forecast</div>
+            <div class="auto-desc">Generate a saved stage-by-stage snapshot from your deal values and entered probabilities.</div>
             </div>
             <button class="slds-btn slds-btn-brand slds-btn-sm">Execute</button>
           </div>
-          <div class="automation-card" onclick="triggerAutomationAction('run_drip_campaign')">
-            <div class="auto-icon bg-purple">✉️</div>
+          <div class="automation-card" onclick="triggerAutomationAction('create_followup_tasks')">
+            <div class="auto-icon bg-purple">✓</div>
             <div class="auto-details">
-              <div class="auto-title">Dispatch Automated Inbound Drip Sequence</div>
-              <div class="auto-desc">Queues personalized follow-up sequences for newly registered leads.</div>
+            <div class="auto-title">Create missing follow-ups</div>
+            <div class="auto-desc">Add dated activity tasks for active leads without an open follow-up. No email is sent.</div>
             </div>
             <button class="slds-btn slds-btn-brand slds-btn-sm">Execute</button>
           </div>

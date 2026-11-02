@@ -46,6 +46,9 @@ class CelerLiteConfig(BaseSettings):
     AUTH_ALLOWED_USER_IDS: str = ""
     AUTH_PUBLIC_ORIGIN: str = ""
     AUTH_COOKIE_SECURE: bool = True
+    DEMO_ENABLED: bool = True
+    DEMO_DATABASE_URL: str = ""
+    DEMO_SESSION_TTL: int = 7200
 
     # Result TTL
     RESULT_TTL: int = 86400  # 24 hours

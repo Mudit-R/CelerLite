@@ -7,15 +7,18 @@ Auto-detects Redis & PostgreSQL, falling back to embedded mode if external servi
 
 import os
 import sys
-import tempfile
 
-# The existing public Render service is a disposable recruiter demo. Keep its
-# data isolated even if the service has database credentials configured.
+# The public Render app requires an approved Supabase user. Recruiter sessions
+# are explicitly routed to a separate synthetic, read-only SQLite database.
 if os.environ.get('RENDER_EXTERNAL_HOSTNAME') == 'celerlite.onrender.com':
-    demo_dir = tempfile.mkdtemp(prefix='celerlite-demo-')
-    os.environ['CELERLITE_AUTH_REQUIRED'] = 'false'
-    os.environ['CELERLITE_DEMO_READ_ONLY'] = 'false'
-    os.environ['CELERLITE_DATABASE_URL'] = 'sqlite+aiosqlite:///' + os.path.join(demo_dir, 'demo.db')
+    os.environ['CELERLITE_AUTH_REQUIRED'] = 'true'
+    os.environ['CELERLITE_DEMO_READ_ONLY'] = 'true'
+    os.environ['CELERLITE_AUTH_COOKIE_SECURE'] = 'true'
+    os.environ.setdefault('CELERLITE_AUTH_PUBLIC_ORIGIN', 'https://celerlite.onrender.com')
+    os.environ.setdefault(
+        'CELERLITE_DEMO_DATABASE_URL',
+        'sqlite+aiosqlite:////tmp/celerlite_recruiter_demo.db',
+    )
 
 # Ensure UTF-8 output on Windows consoles
 if sys.platform == "win32":

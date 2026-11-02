@@ -1,7 +1,8 @@
 """CRM API endpoints for Leads, Accounts, Contacts, Deals, and Activities."""
 
 import uuid
-from typing import Optional
+from datetime import date, timedelta
+from typing import Literal, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, field_validator
@@ -11,9 +12,10 @@ from celerlite.config import config
 from celerlite.api.app import get_broker
 from celerlite.api.insights import pipeline_insights
 from celerlite.broker.redis_broker import RedisBroker
-from celerlite.broker.serializer import Serializer, TaskMessage
+from celerlite.broker.serializer import TaskMessage
 from celerlite.persistence.crm_repository import CRMRepository
 from celerlite.persistence.database import get_session
+from celerlite.api.task_submission import enqueue_tracked_task
 
 router = APIRouter()
 
@@ -122,7 +124,7 @@ class CreateActivityRequest(DemoSafeModel):
 
 
 class CRMAutomationRequest(BaseModel):
-    action: str  # enrich_leads, run_drip_campaign, calculate_deal_probabilities, sync_crm_cache
+    action: Literal["score_leads", "pipeline_forecast", "create_followup_tasks"]
     target_id: Optional[str] = None
 
 
@@ -198,7 +200,7 @@ async def convert_lead_to_deal(lead_id: str):
                 "stage": "Qualification",
                 "amount": target_lead.get("annual_revenue") or 85000,
                 "probability": 40,
-                "close_date": "2026-11-30",
+                "close_date": (date.today() + timedelta(days=30)).isoformat(),
                 "deal_type": "New Business",
                 "owner": target_lead.get("owner") or "Alex Chen",
                 "next_step": "Schedule technical deep dive with engineering team",
@@ -311,26 +313,32 @@ async def trigger_crm_automation(
     body: CRMAutomationRequest,
     broker: RedisBroker = Depends(get_broker),
 ):
-    """Enqueues an asynchronous background job into the CelerLite distributed task queue."""
-    task_name = f"crm.automation.{body.action}"
+    """Queue a real CRM workflow and persist it for task inspection."""
+    task_names = {
+        "score_leads": "celerlite.crm.score_leads",
+        "pipeline_forecast": "celerlite.crm.pipeline_forecast",
+        "create_followup_tasks": "celerlite.crm.create_followup_tasks",
+    }
+    task_name = task_names[body.action]
     task_id = str(uuid.uuid4())
     message = TaskMessage(
         task_id=task_id,
         task_name=task_name,
-        args=[body.action, body.target_id],
-        kwargs={"triggered_by": "CRM Platform Automation Engine"},
+        args=[body.target_id] if body.action != "pipeline_forecast" else [],
+        kwargs={},
         queue="crm",
-        priority=2,  # HIGH priority
+        priority=2,
         max_retries=3,
         timeout=120,
+        metadata={"workflow": body.action},
     )
-    raw = Serializer.serialize(message)
-    if broker:
-        await broker.enqueue("crm", raw, priority=2)
+    await enqueue_tracked_task(message, broker)
 
     return {
-        "status": "QUEUED",
+        "status": "PENDING",
         "task_id": task_id,
         "task_name": task_name,
-        "message": f"CRM background workflow '{body.action}' enqueued to CelerLite engine.",
+        "queue": "crm",
+        "workflow": body.action,
+        "message": "Workflow accepted by the CRM queue. Open the task inspector to follow its result.",
     }

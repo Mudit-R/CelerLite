@@ -15,6 +15,7 @@ from celerlite.observability.metrics import metrics
 from celerlite.persistence.database import get_session
 from celerlite.persistence.repository import TaskRepository
 from celerlite.scheduler.priority import Priority
+from celerlite.api.task_submission import enqueue_tracked_task
 
 router = APIRouter()
 
@@ -59,20 +60,7 @@ async def submit_task(body: SubmitTaskRequest, broker: RedisBroker = Depends(get
         eta=body.eta,
         metadata=body.metadata,
     )
-    raw = Serializer.serialize(message)
-    await broker.enqueue(body.queue, raw, priority=body.priority)
-
-    async with get_session() as session:
-        repo = TaskRepository(session)
-        await repo.create_task(message)
-
-    await broker.publish_event({
-        "event": "task_submitted",
-        "task_id": message.task_id,
-        "task_name": body.task_name,
-        "queue": body.queue,
-    })
-    metrics.record_submitted()
+    await enqueue_tracked_task(message, broker)
 
     return {"task_id": message.task_id, "status": "PENDING", "queue": body.queue}
 

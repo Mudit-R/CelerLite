@@ -73,10 +73,18 @@ async def lifespan(app: FastAPI):
 
         # Initialize and seed before starting workers or serving concurrent requests.
         await init_db()
-        from celerlite.persistence.database import get_session
+        from celerlite.persistence.database import get_session, init_demo_db, use_demo_database
         from celerlite.persistence.crm_repository import CRMRepository
         async with get_session() as session:
             await CRMRepository(session).seed_demo_data_if_empty()
+        if config.DEMO_ENABLED and config.DEMO_DATABASE_URL:
+            try:
+                await init_demo_db()
+                with use_demo_database():
+                    async with get_session() as session:
+                        await CRMRepository(session).seed_demo_data_if_empty()
+            except Exception as exc:
+                logger.warning("demo_workspace_unavailable", error=str(exc))
         if embedded_mode:
             embedded_task = asyncio.create_task(
                 run_embedded_worker(_broker, stop_event=stop_event)
@@ -84,10 +92,20 @@ async def lifespan(app: FastAPI):
         logger.info("api_started", host=config.API_HOST, port=config.API_PORT)
     else:
         from celerlite.broker.memory_broker import InMemoryBroker
+        from celerlite.persistence.crm_repository import CRMRepository
+        from celerlite.persistence.database import get_session, init_demo_db, use_demo_database
 
         _broker = InMemoryBroker(config)
         await _broker.connect()
         await init_db()
+        if config.DEMO_ENABLED and config.DEMO_DATABASE_URL:
+            try:
+                await init_demo_db()
+                with use_demo_database():
+                    async with get_session() as session:
+                        await CRMRepository(session).seed_demo_data_if_empty()
+            except Exception as exc:
+                logger.warning("demo_workspace_unavailable", error=str(exc))
 
     yield
     stop_event.set()
@@ -104,9 +122,10 @@ async def lifespan(app: FastAPI):
 
 def create_app(serverless: bool = False) -> FastAPI:
     from celerlite.api.routes import crm, dlq, metrics, tasks, workers
-    from celerlite.api.auth import router as auth_router, verified_user, valid_origin, COOKIE
+    from celerlite.api.auth import router as auth_router, verified_user, valid_origin, valid_demo_session, COOKIE, DEMO_COOKIE
     from fastapi import Depends
     from starlette.responses import JSONResponse
+    from celerlite.persistence.database import use_demo_database
 
     is_serverless = (
         serverless
@@ -120,7 +139,7 @@ def create_app(serverless: bool = False) -> FastAPI:
 
     app = FastAPI(
         title="CelerLite CRM & Task Engine",
-        description="Enterprise Distributed CRM Platform & High-Throughput Task Queue",
+        description="Customer workflows and a Redis-backed background task engine.",
         version="1.0.0",
         lifespan=app_lifespan,
         docs_url="/docs",
@@ -129,17 +148,33 @@ def create_app(serverless: bool = False) -> FastAPI:
 
     @app.middleware('http')
     async def protect_workspace(request, call_next):
-        if (config.DEMO_READ_ONLY and request.url.path.startswith('/api/v1/')
-                and request.method not in ('GET', 'HEAD', 'OPTIONS')):
-            return JSONResponse({'detail': 'This public demo is read-only'}, status_code=403,
-                                headers={'Cache-Control': 'no-store'})
-        if config.AUTH_REQUIRED and request.url.path.startswith('/api/v1/'):
-            if request.method not in ('GET', 'HEAD', 'OPTIONS') and not valid_origin(request.headers.get('origin')):
-                return JSONResponse({'detail': 'Invalid request origin'}, status_code=403)
-            if not await verified_user(request.cookies.get(COOKIE)):
-                return JSONResponse({'detail': 'Sign in required'}, status_code=401,
+        is_api = request.url.path.startswith('/api/v1/')
+        safe_method = request.method in ('GET', 'HEAD', 'OPTIONS')
+        is_demo = is_api and config.AUTH_REQUIRED and valid_demo_session(request.cookies.get(DEMO_COOKIE))
+
+        if is_api:
+            if is_demo:
+                if not safe_method:
+                    return JSONResponse({'detail': 'The recruiter demo is read-only'}, status_code=403,
+                                        headers={'Cache-Control': 'no-store'})
+                if not request.url.path.startswith('/api/v1/crm/'):
+                    return JSONResponse({'detail': 'This endpoint is unavailable in the recruiter demo'}, status_code=403,
+                                        headers={'Cache-Control': 'no-store'})
+            elif config.AUTH_REQUIRED:
+                if not safe_method and not valid_origin(request.headers.get('origin')):
+                    return JSONResponse({'detail': 'Invalid request origin'}, status_code=403)
+                if not await verified_user(request.cookies.get(COOKIE)):
+                    return JSONResponse({'detail': 'Sign in required'}, status_code=401,
+                                        headers={'Cache-Control': 'no-store'})
+            elif config.DEMO_READ_ONLY and not safe_method:
+                return JSONResponse({'detail': 'This public demo is read-only'}, status_code=403,
                                     headers={'Cache-Control': 'no-store'})
-        result = await call_next(request)
+
+        if is_demo:
+            with use_demo_database():
+                result = await call_next(request)
+        else:
+            result = await call_next(request)
         if request.url.path.startswith('/api/v1/'):
             result.headers['Cache-Control'] = 'no-store'
         return result
@@ -161,10 +196,12 @@ def create_app(serverless: bool = False) -> FastAPI:
     from fastapi.responses import HTMLResponse, Response
 
     possible_dirs = [
-        os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "api", "dashboard")),
-        os.path.abspath(os.path.join(os.getcwd(), "api", "dashboard")),
         os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "dashboard")),
         os.path.abspath(os.path.join(os.getcwd(), "dashboard")),
+        # Keep the API copy as a deployment fallback for serverless packagers
+        # that only include files beneath the `api/` directory.
+        os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "api", "dashboard")),
+        os.path.abspath(os.path.join(os.getcwd(), "api", "dashboard")),
         "/var/task/api/dashboard",
         "/var/task/dashboard",
     ]
@@ -208,14 +245,37 @@ def create_app(serverless: bool = False) -> FastAPI:
 
     @app.get("/health")
     async def health(broker: RedisBroker = Depends(get_broker)):
+        from sqlalchemy import text
+        from celerlite.persistence import database as database_module
+        from celerlite.api.auth import demo_available, is_configured
+
         try:
-            if broker:
-                redis_info = await broker.get_redis_info()
-            else:
-                redis_info = {"connected": False}
+            broker_info = await broker.get_redis_info() if broker else {"connected": False}
         except Exception:
-            redis_info = {"connected": False}
-        return {"status": "healthy", "redis": redis_info}
+            broker_info = {"connected": False}
+
+        try:
+            async with database_module.get_session() as session:
+                await session.execute(text("SELECT 1"))
+            database_connected = True
+        except Exception:
+            database_connected = False
+
+        dependencies = {
+            "broker": broker_info,
+            "database": {
+                "connected": database_connected,
+                "dialect": database_module.engine.url.get_backend_name(),
+            },
+            "auth_configured": is_configured(),
+            "demo_available": demo_available(),
+        }
+        healthy = bool(broker_info.get("connected") and database_connected)
+        return JSONResponse(
+            {"status": "healthy" if healthy else "degraded", **dependencies},
+            status_code=200 if healthy else 503,
+            headers={"Cache-Control": "no-store"},
+        )
 
     return app
 

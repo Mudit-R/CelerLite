@@ -1,7 +1,8 @@
 """Async SQLAlchemy engine and session factory with automatic SQLite fallback."""
 
 import os
-from contextlib import asynccontextmanager
+from contextlib import asynccontextmanager, contextmanager
+from contextvars import ContextVar
 from typing import AsyncIterator
 
 from sqlalchemy.ext.asyncio import (
@@ -9,6 +10,7 @@ from sqlalchemy.ext.asyncio import (
     async_sessionmaker,
     create_async_engine,
 )
+from sqlalchemy.engine import make_url
 
 from celerlite.config import config
 from celerlite.observability.logger import get_logger
@@ -56,6 +58,68 @@ AsyncSessionLocal = async_sessionmaker(
 )
 
 _db_initialized = False
+_demo_engine = None
+_demo_session_local = None
+_demo_db_url = ""
+_demo_db_initialized = False
+_database_target: ContextVar[str] = ContextVar("celerlite_database_target", default="private")
+
+
+def demo_database_isolated() -> bool:
+    """Whether demo reads are routed to a distinct database from private records."""
+    demo_url = config.DEMO_DATABASE_URL.strip()
+    if not demo_url:
+        return False
+
+    def identity(url: str):
+        parsed = make_url(url)
+        dialect = parsed.get_backend_name()
+        if dialect == "postgres":
+            dialect = "postgresql"
+        if dialect == "sqlite":
+            database = parsed.database or ":memory:"
+            path = database if database == ":memory:" else os.path.normcase(os.path.abspath(database))
+            return dialect, path
+        if dialect == "postgresql":
+            # Treat the same Postgres database name as the same identity even
+            # when internal/external hostnames or credentials differ. This is
+            # intentionally conservative: demo storage should have its own DB.
+            return dialect, (parsed.database or "").casefold()
+        # Ignore driver and credentials so equivalent URLs cannot masquerade
+        # as separate databases.
+        return dialect, parsed.host, parsed.port, parsed.database
+
+    try:
+        demo_identity = identity(demo_url)
+        private_urls = {
+            str(engine.url),
+            _initial_db_url,
+            config.DATABASE_URL,
+            os.environ.get("CELERLITE_DATABASE_URL", ""),
+            os.environ.get("DATABASE_URL", ""),
+        }
+
+        # If the configured private Postgres database fails during startup,
+        # init_db() falls back to this exact SQLite location. Include it even
+        # before initialization so a colliding demo override never races that
+        # fallback and becomes an alias for private records.
+        if any(identity(url)[0] == "postgresql" for url in private_urls if url):
+            fallback_path = "/tmp/celerlite_dev.db" if _is_vercel else "./celerlite_dev.db"
+            private_urls.add(f"sqlite+aiosqlite:///{fallback_path}")
+
+        return all(identity(url) != demo_identity for url in private_urls if url)
+    except (ValueError, TypeError):
+        return False
+
+
+@contextmanager
+def use_demo_database():
+    """Route database sessions created in this request/task context to demo data."""
+    token = _database_target.set("demo")
+    try:
+        yield
+    finally:
+        _database_target.reset(token)
 
 
 async def init_db() -> None:
@@ -89,6 +153,33 @@ async def init_db() -> None:
             raise
 
 
+async def ensure_demo_db_ready() -> None:
+    """Initialize the isolated synthetic-data database when configured."""
+    global _demo_engine, _demo_session_local, _demo_db_url, _demo_db_initialized
+    url = config.DEMO_DATABASE_URL.strip()
+    if not url or not demo_database_isolated():
+        raise RuntimeError("An isolated demo database is not configured")
+    if _demo_engine is None or _demo_db_url != url:
+        if _demo_engine is not None:
+            await _demo_engine.dispose()
+        _demo_engine = _create_engine(url)
+        _demo_session_local = async_sessionmaker(
+            _demo_engine, class_=AsyncSession, expire_on_commit=False
+        )
+        _demo_db_url = url
+        _demo_db_initialized = False
+    if not _demo_db_initialized:
+        async with _demo_engine.begin() as conn:
+            await conn.run_sync(Base.metadata.create_all)
+        _demo_db_initialized = True
+        logger.info("demo_db_initialized", url=str(_demo_engine.url))
+
+
+async def init_demo_db() -> None:
+    """Initialize the demo database during application startup."""
+    await ensure_demo_db_ready()
+
+
 async def ensure_db_ready() -> None:
     """Ensure database tables are created (essential for serverless where lifespan may not run)."""
     global _db_initialized
@@ -105,8 +196,13 @@ async def drop_db() -> None:
 @asynccontextmanager
 async def get_session() -> AsyncIterator[AsyncSession]:
     """Async context manager for a database session with lazy initialization."""
-    await ensure_db_ready()
-    async with AsyncSessionLocal() as session:
+    if _database_target.get() == "demo":
+        await ensure_demo_db_ready()
+        session_factory = _demo_session_local
+    else:
+        await ensure_db_ready()
+        session_factory = AsyncSessionLocal
+    async with session_factory() as session:
         try:
             yield session
             await session.commit()

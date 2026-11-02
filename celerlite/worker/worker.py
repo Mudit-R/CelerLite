@@ -24,6 +24,32 @@ from celerlite.worker.heartbeat import HeartbeatPublisher
 
 logger = get_logger(__name__)
 
+# Queues exposed by the dashboard and the built-in CRM workflows. Workers
+# poll these round-robin so a busy default queue cannot starve less common
+# queues such as CRM automation, notifications, or analytics.
+WORKER_QUEUES = (
+    "default",
+    "crm",
+    "notifications",
+    "analytics",
+    "emails",
+    "payments",
+    "high_priority",
+)
+QUEUE_POLL_SECONDS = 0.001
+QUEUE_IDLE_SLEEP_SECONDS = 0.05
+
+
+def configured_worker_queues() -> tuple[str, ...]:
+    """Return queues this worker should consume, preserving configured order."""
+    configured = os.environ.get("CELERLITE_WORKER_QUEUES", "")
+    if not configured.strip():
+        return WORKER_QUEUES
+    queues = tuple(
+        dict.fromkeys(name.strip() for name in configured.split(",") if name.strip())
+    )
+    return queues or WORKER_QUEUES
+
 # Global task registry: task_name → callable
 _task_registry: dict[str, Any] = {}
 
@@ -53,6 +79,8 @@ class Worker:
         self._tasks_processed = 0
         self._tasks_failed = 0
         self._current_task_id: Optional[str] = None
+        self._next_queue_index = 0
+        self._queues = configured_worker_queues()
         self._broker: Optional[RedisBroker] = None
         self._heartbeat: Optional[HeartbeatPublisher] = None
         self._retry_policy = RetryPolicy(cfg)
@@ -70,6 +98,12 @@ class Worker:
     async def _async_run(self) -> None:
         self._broker = RedisBroker(self.cfg)
         await self._broker.connect()
+        # Register application workflows in the worker process itself. With
+        # multiprocessing spawn, parent-process task registrations are not
+        # inherited by child workers.
+        from celerlite.tasks.crm import register_crm_tasks
+
+        register_crm_tasks()
         redis_client = self._broker.client
         self._heartbeat = HeartbeatPublisher(
             self.worker_id, redis_client, ttl=self.cfg.HEARTBEAT_TIMEOUT + 5
@@ -108,23 +142,53 @@ class Worker:
                 logger.error("heartbeat_error", worker_id=self.worker_id, error=str(e))
             await asyncio.sleep(self.cfg.HEARTBEAT_INTERVAL)
 
+    async def _dequeue_next(self) -> tuple[Optional[str], Optional[bytes]]:
+        """Reserve the next available task, fairly polling every configured queue."""
+        count = len(self._queues)
+        start = self._next_queue_index
+        for offset in range(count):
+            index = (start + offset) % count
+            queue_name = self._queues[index]
+            raw = await self._broker.dequeue(queue_name, timeout=QUEUE_POLL_SECONDS)
+            if raw is not None:
+                self._next_queue_index = (index + 1) % count
+                return queue_name, raw
+
+        # Rotate even when all queues are empty. This makes the first queue
+        # checked on the next poll independent of a fixed queue ordering.
+        self._next_queue_index = (start + 1) % count
+        return None, None
+
     async def _process_one(self) -> None:
-        """Pull one task from the broker and process it."""
-        raw = await self._broker.dequeue("default", timeout=5)
+        """Pull one task from any worker queue and process it."""
+        queue_name, raw = await self._dequeue_next()
         if raw is None:
+            await asyncio.sleep(QUEUE_IDLE_SLEEP_SECONDS)
             return
 
         try:
             message = Serializer.deserialize(raw)
         except Exception as e:
             logger.error("deserialization_error", error=str(e))
-            await self._broker.acknowledge("default", raw)
+            await self._broker.acknowledge(queue_name, raw)
             return
+
+        # The reserved broker queue is authoritative for acknowledgement and
+        # retry operations; keep task metadata aligned if a malformed producer
+        # supplied a different queue name inside the payload.
+        if message.queue != queue_name:
+            logger.warning(
+                "task_queue_mismatch",
+                task_id=message.task_id,
+                payload_queue=message.queue,
+                reserved_queue=queue_name,
+            )
+            message.queue = queue_name
 
         # Check if revoked
         if message.revoked or await self._broker.is_revoked(message.task_id):
             logger.info("task_revoked_skip", task_id=message.task_id)
-            await self._broker.acknowledge("default", raw)
+            await self._broker.acknowledge(queue_name, raw)
             await self._update_task_status(message.task_id, "REVOKED")
             return
 
@@ -132,7 +196,7 @@ class Worker:
         if message.eta:
             eta_ts = datetime.fromisoformat(message.eta).timestamp()
             if time.time() < eta_ts:
-                await self._broker.reject("default", raw, requeue=True)
+                await self._broker.reject(queue_name, raw, requeue=True)
                 await asyncio.sleep(0.5)
                 return
 
@@ -162,7 +226,7 @@ class Worker:
             await self._broker.store_result(
                 message.task_id, result_bytes, ttl=self.cfg.RESULT_TTL
             )
-            await self._broker.acknowledge("default", raw)
+            await self._broker.acknowledge(queue_name, raw)
 
             self._tasks_processed += 1
             metrics.record_completed(duration_ms)
@@ -188,7 +252,7 @@ class Worker:
             )
 
         except Exception as exc:
-            await self._handle_failure(message, raw, exc)
+            await self._handle_failure(message, raw, exc, queue_name=queue_name)
         finally:
             self._current_task_id = None
 
@@ -220,8 +284,15 @@ class Worker:
                 f"Task '{message.task_name}' exceeded timeout of {timeout}s"
             )
 
-    async def _handle_failure(self, message: TaskMessage, raw: bytes, error: Exception) -> None:
+    async def _handle_failure(
+        self,
+        message: TaskMessage,
+        raw: bytes,
+        error: Exception,
+        queue_name: Optional[str] = None,
+    ) -> None:
         """Apply retry policy or route to DLQ."""
+        queue_name = queue_name or message.queue or "default"
         self._tasks_failed += 1
         metrics.record_failed()
         tb = traceback.format_exc()
@@ -236,7 +307,7 @@ class Worker:
         if self._retry_policy.should_retry(message, error):
             retry_message = self._retry_policy.prepare_retry(message)
             retry_raw = Serializer.serialize(retry_message)
-            moved = await self._broker.replace_reserved("default", raw, retry_raw, message.priority)
+            moved = await self._broker.replace_reserved(queue_name, raw, retry_raw, message.priority)
             if not moved:
                 logger.warning("retry_reservation_missing", task_id=message.task_id)
                 return
@@ -264,7 +335,7 @@ class Worker:
                 error_traceback=tb,
             )
             await self._save_to_dlq(dlq_data)
-            await self._broker.acknowledge("default", raw)
+            await self._broker.acknowledge(queue_name, raw)
             metrics.record_dead_lettered()
             await self._broker.publish_event({
                 "event": "task_dead_lettered",

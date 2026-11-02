@@ -73,7 +73,8 @@ class TestAPIEndpoints:
             assert resp.status_code == 200
             data = resp.json()
             assert data["status"] == "healthy"
-            assert data["redis"]["connected"] is True
+            assert data["broker"]["connected"] is True
+            assert data["database"]["connected"] is True
 
     async def test_submit_task_endpoint(self, test_app):
         app, mock_broker = test_app

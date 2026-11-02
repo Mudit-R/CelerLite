@@ -9,6 +9,9 @@ import pytest
 from httpx import ASGITransport, AsyncClient
 from starlette.testclient import TestClient
 from starlette.websockets import WebSocketDisconnect
+from sqlalchemy import URL
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+from types import SimpleNamespace
 
 from celerlite.api import auth
 from celerlite.api.app import create_app
@@ -61,7 +64,8 @@ async def test_unapproved_user_and_missing_configuration_fail_closed(auth_config
         response = await client.post('/auth/login', json={'email': 'test@example.org', 'password': 'test'}, headers={'Origin': 'http://localhost'})
         assert response.status_code == 403 and auth.COOKIE not in client.cookies
         monkeypatch.setattr(config, 'AUTH_ALLOWED_USER_IDS', '')
-        assert (await client.get('/auth/session')).status_code == 503
+        unavailable = await client.get('/auth/session')
+        assert unavailable.status_code == 200 and unavailable.json()['auth_configured'] is False
         assert (await client.get('/api/v1/tasks')).status_code == 401
 
 
@@ -136,6 +140,112 @@ async def test_read_only_demo_blocks_api_writes(monkeypatch):
         response = await client.post('/api/v1/crm/leads', json={})
         assert response.status_code == 403 and response.json()['detail'] == 'This public demo is read-only'
         assert (await client.get('/api/v1/not-a-route')).status_code == 404
+
+
+def test_demo_database_rejects_private_database_even_with_different_driver_and_credentials(monkeypatch):
+    from celerlite.persistence import database as db_mod
+
+    monkeypatch.setattr(db_mod, 'engine', SimpleNamespace(url=URL.create(
+        'postgresql+asyncpg', username='private_user', password='private_pass',
+        host='db.example.test', port=5432, database='celerlite')))
+    monkeypatch.setattr(config, 'DEMO_DATABASE_URL',
+                        'postgresql://another_user:another_pass@db.example.test:5432/celerlite')
+    assert db_mod.demo_database_isolated() is False
+
+    monkeypatch.setattr(config, 'DEMO_DATABASE_URL',
+                        'postgresql://demo_user:demo_pass@db.example.test:5432/celerlite_demo')
+    assert db_mod.demo_database_isolated() is True
+
+
+def test_demo_database_isolation_survives_private_postgres_fallback(monkeypatch):
+    from celerlite.persistence import database as db_mod
+
+    # A failed private Postgres connection swaps the active engine to SQLite.
+    # The original private URL must still be considered when validating demo.
+    monkeypatch.setattr(db_mod, "engine", SimpleNamespace(url=URL.create(
+        "sqlite+aiosqlite", database="./celerlite_dev.db")))
+    monkeypatch.setattr(db_mod, "_initial_db_url",
+                        "postgresql+asyncpg://private:secret@internal.example/celerlite")
+    monkeypatch.setattr(config, "DATABASE_URL",
+                        "postgresql+asyncpg://private:secret@internal.example/celerlite")
+    monkeypatch.setattr(config, "DEMO_DATABASE_URL",
+                        "postgresql://demo:secret@external.example/celerlite")
+    assert db_mod.demo_database_isolated() is False
+
+    # The SQLite fallback path is also reserved for private records, even
+    # before startup has replaced the configured Postgres engine.
+    monkeypatch.setattr(db_mod, "engine", SimpleNamespace(url=URL.create(
+        "postgresql+asyncpg", host="internal.example", database="celerlite")))
+    monkeypatch.setattr(config, "DEMO_DATABASE_URL",
+                        "sqlite+aiosqlite:///./celerlite_dev.db")
+    assert db_mod.demo_database_isolated() is False
+
+
+def test_demo_start_rate_limit_is_bounded_and_expires(monkeypatch):
+    auth._demo_attempts.clear()
+    monkeypatch.setattr(auth.time, "monotonic", lambda: 100.0)
+    for _ in range(auth._DEMO_ATTEMPT_LIMIT):
+        assert auth._allow_demo_attempt("203.0.113.1") is True
+    assert auth._allow_demo_attempt("203.0.113.1") is False
+
+    monkeypatch.setattr(auth.time, "monotonic", lambda: 100.0 + auth._DEMO_ATTEMPT_WINDOW_SECONDS + 1)
+    assert auth._allow_demo_attempt("203.0.113.1") is True
+    auth._demo_attempts.clear()
+
+
+async def test_recruiter_demo_is_read_only_and_uses_isolated_synthetic_database(auth_config, monkeypatch, tmp_path):
+    from celerlite.persistence.models import Base
+    from celerlite.persistence.crm_repository import CRMRepository
+    from celerlite.persistence import database as db_mod
+
+    private_engine = create_async_engine('sqlite+aiosqlite:///:memory:', echo=False)
+    async with private_engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+    private_sessions = async_sessionmaker(private_engine, class_=AsyncSession, expire_on_commit=False)
+    monkeypatch.setattr(db_mod, 'engine', private_engine)
+    monkeypatch.setattr(db_mod, 'AsyncSessionLocal', private_sessions)
+    monkeypatch.setattr(db_mod, '_db_initialized', True)
+    monkeypatch.setattr(config, 'DEMO_ENABLED', True)
+    monkeypatch.setattr(config, 'DEMO_SESSION_TTL', 300)
+    monkeypatch.setattr(config, 'DEMO_DATABASE_URL', str(URL.create(
+        'sqlite+aiosqlite', database=str(tmp_path / 'synthetic-demo.sqlite'))))
+    monkeypatch.setattr(auth, 'verified_user', AsyncMock(side_effect=lambda token: (
+        {'id': 'approved-id', 'email': 'owner@example.org'} if token == 'valid' else None
+    )))
+
+    async with private_sessions() as private_session:
+        await CRMRepository(private_session).create_lead({
+            'first_name': 'Private', 'last_name': 'Record', 'company': 'Owner Only',
+            'email': 'private@example.org',
+        })
+
+    async with AsyncClient(transport=ASGITransport(app=create_app(serverless=True)), base_url='http://localhost') as client:
+        anonymous = await client.get('/auth/session')
+        assert anonymous.status_code == 200
+        assert anonymous.json()['user'] is None
+        assert anonymous.json()['demo_available'] is True
+
+        demo = await client.post('/auth/demo', headers={'Origin': 'http://localhost'})
+        assert demo.status_code == 200
+        assert demo.json()['read_only'] is True
+        cookie = client.cookies.get(auth.DEMO_COOKIE)
+        assert cookie and 'HttpOnly' in demo.headers['set-cookie'] and 'SameSite=strict' in demo.headers['set-cookie']
+
+        demo_leads = await client.get('/api/v1/crm/leads')
+        assert demo_leads.status_code == 200
+        demo_emails = {lead['email'] for lead in demo_leads.json()['leads']}
+        assert 'private@example.org' not in demo_emails
+        blocked = await client.post('/api/v1/crm/leads', headers={'Origin': 'http://localhost'}, json={})
+        assert blocked.status_code == 403
+        assert (await client.get('/api/v1/tasks')).status_code == 403
+
+        await client.post('/auth/logout', headers={'Origin': 'http://localhost'})
+        client.cookies.set(auth.COOKIE, 'valid')
+        private_leads = await client.get('/api/v1/crm/leads')
+        assert private_leads.status_code == 200
+        assert 'private@example.org' in {lead['email'] for lead in private_leads.json()['leads']}
+
+    await private_engine.dispose()
 
 
 def test_demo_rejects_markup_and_unsafe_websites(monkeypatch):

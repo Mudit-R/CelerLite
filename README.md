@@ -1,4 +1,4 @@
-# CelerLite CRM — Enterprise Sales Platform & Distributed Task Engine
+# CelerLite — Customer Workflows & Background Task Operations
 
 [![Live Demo](https://img.shields.io/badge/Live%20Demo-Render-46E3B7?logo=render&logoColor=white)](https://celerlite.onrender.com/)
 [![Python](https://img.shields.io/badge/Python-3.11%20%7C%203.12-blue?logo=python&logoColor=white)](https://python.org)
@@ -6,12 +6,11 @@
 [![Redis](https://img.shields.io/badge/Redis-7.0+-DC382D?logo=redis&logoColor=white)](https://redis.io)
 [![PostgreSQL](https://img.shields.io/badge/PostgreSQL-15+-336791?logo=postgresql&logoColor=white)](https://postgresql.org)
 [![Docker](https://img.shields.io/badge/Docker-Compose-2496ED?logo=docker&logoColor=white)](https://docker.com)
-[![Tests](https://img.shields.io/badge/Tests-local%20suite-success?logo=pytest&logoColor=white)](tests/)
 [![License](https://img.shields.io/badge/License-MIT-purple.svg)](LICENSE)
 
 > **Live Deployment**: [https://celerlite.onrender.com/](https://celerlite.onrender.com/)  
 > **Swagger API Docs**: [https://celerlite.onrender.com/docs](https://celerlite.onrender.com/docs)  
-> **CelerLite CRM** is an enterprise-grade Customer Relationship Management (CRM) platform and distributed asynchronous execution engine. Designed with a Salesforce Lightning interface, it features full Lead Management, interactive Opportunities/Deals Kanban Pipeline, Corporate Accounts, Contact Directory, Activity Timelines, and automated background AI workflow dispatch.
+> **CelerLite** brings customer pipeline work and background task operations into one workspace. It includes lead, account, contact, opportunity, and activity workflows alongside a Redis-backed task engine with priority queues, retries, and dead-letter handling. The public preview uses synthetic CRM records and is read-only; approved workspace members can use sign-in for private records.
 
 ---
 
@@ -39,7 +38,7 @@ messages. See [measured results and delivery boundaries](docs/RELIABILITY.md).
 
 ## System Architecture
 
-CelerLite decouples producers and consumers using an asynchronous broker architecture with strict separation between hot-path scheduling (Redis) and durable queryable persistence (PostgreSQL):
+CelerLite decouples producers and consumers using Redis for queue scheduling and SQLAlchemy for task and CRM records. PostgreSQL is used when configured; local development can fall back to SQLite.
 
 ```
                         ┌────────────────────────────────────────────────┐
@@ -68,13 +67,13 @@ CelerLite decouples producers and consumers using an asynchronous broker archite
   │ ┌─────────────────────────────┐ │ │ ┌───────────────────────┐ │ │  • REST API (/api/v1)    │
   │ │ Worker Pool Manager         │ │ │ │ Tasks Audit Log       │ │ │  • WebSocket Stream      │
   │ │  • Dynamic Forking & Reap   │ │ │ │ Workers Fleet Table   │ │ │  • Prometheus Exporter   │
-  │ │  • Heartbeat Supervisor     │ │ │ │ Dead Letter Queue     │ │ │  • Salesforce Lightning UI       │
+  │ │  • Heartbeat Supervisor     │ │ │ │ Dead Letter Queue     │ │ │  • Customer Workflow UI          │
   │ ├─────────────────────────────┤ │ │ └───────────────────────┘ │ └─────────────┬────────────┘
   │ │ Worker Process [1..N]       │ │ └───────────────────────────┘               │
   │ │  • Token-Bucket Limiter     │ │                                             │ WebSockets
   │ │  • Late Ack (TASK_ACK_LATE) │ │                                             v
   │ │  • Timeout Isolation (SIG)  │ │                              ┌───────────────────────────┐
-  │ └─────────────────────────────┘ │                              │  Salesforce Lightning Console   │
+  │ └─────────────────────────────┘ │                              │  CRM + Task Operations Console   │
   └─────────────────────────────────┘                              │  Live KPIs, Donut, Fleet  │
                                                                    └───────────────────────────┘
 ```
@@ -84,32 +83,32 @@ CelerLite decouples producers and consumers using an asynchronous broker archite
 ## Core Engineering Highlights
 
 ### 1. Strict Priority Scheduling (Multi-Queue Ordering)
-Tasks are enqueued into separate Redis data structures indexed by priority (`CRITICAL=3`, `HIGH=2`, `NORMAL=1`, `LOW=0`). Workers drain queues in strict priority order via atomic multi-queue polling, ensuring mission-critical workloads (e.g. payment processing, fraud alerts) are never starved by high-volume background jobs (e.g. batch reports).
+Tasks are enqueued into separate Redis data structures indexed by priority (`CRITICAL=3`, `HIGH=2`, `NORMAL=1`, `LOW=0`). Redis atomically reserves work in priority order within each application queue. Workers poll configured application queues round-robin so a busy default queue does not monopolize the worker.
 
 ### 2. At-Least-Once Delivery with Late Acknowledgment (`TASK_ACK_LATE`)
-To prevent data loss during worker failures:
+To make work recoverable after worker failures:
 - Tasks are popped from the ready queue into a dedicated unacknowledged processing registry.
 - A task is **only acknowledged and cleared from Redis after successful completion**.
-- If a worker crashes mid-execution (SIGKILL, OOM, hardware failure), the Heartbeat Supervisor detects the orphan task and automatically re-enqueues it.
+- If a worker crashes with a reserved task, recovery can re-enqueue it after the reservation expires. Delivery is at-least-once, so task handlers must make side effects idempotent.
 
 ### 3. Exponential Backoff with Full Jitter & Dead Letter Queue (DLQ)
 Transient failures are retried using truncated exponential backoff with full jitter to avoid the "thundering herd" problem:
 $$\text{delay} = \min(\text{backoff\_max},\ \text{backoff\_base}^{\text{retry}} \pm \text{jitter})$$
 - Non-recoverable errors marked with `FatalError` bypass retries immediately.
 - Tasks exceeding `max_retries` are routed to the **Dead Letter Queue (DLQ)** along with complete contextual metadata, full exception tracebacks, and original execution parameters.
-- Operators can replay single DLQ entries or bulk-replay thousands of failed tasks via the REST API or UI.
+- Operators can inspect failed tasks and replay entries from the dead-letter queue through the REST API or UI.
 
 ### 4. Distributed Sliding-Window Token Bucket Rate Limiting
-Task types can be rate-limited cluster-wide (e.g. `rate_limit="60/m"` for external APIs). The rate limiter uses Redis Sorted Sets (`ZREMRANGEBYSCORE`, `ZCARD`, `ZADD`) for sub-millisecond atomic sliding-window enforcement across all distributed nodes without requiring a centralized rate-limiting server.
+Task types can be rate-limited cluster-wide (e.g. `rate_limit="60/m"` for external APIs). The limiter uses Redis Sorted Sets (`ZREMRANGEBYSCORE`, `ZCARD`, `ZADD`) to enforce a shared sliding window across workers.
 
-### 5. High-Throughput Binary Serialization
+### 5. Task Serialization
 Supports both JSON and **MessagePack (`msgpack`)** serialization. JSON and MessagePack are available as serialization formats; comparative performance has not been established by the included broker benchmark.
 
-### 6. Glassmorphic Real-Time Dashboard & Telemetry
-A native vanilla CSS/JS dashboard served directly by FastAPI:
+### 6. Workspace UI & Telemetry
+A native HTML/CSS/JS workspace served directly by FastAPI:
 - WebSocket updates driven by broker events.
 - Live Chart.js throughput graphs & task status donut charts.
-- Worker fleet status table with real-time heartbeat health indicators.
+- Worker fleet status table with heartbeat health indicators.
 - Interactive DLQ explorer with instant replay and task deletion.
 - Task submission sandbox for interactive testing.
 
@@ -139,7 +138,7 @@ CelerLite/
 │   ├── observability/          # Logging & metrics
 │   │   ├── logger.py           # Structured JSON logger
 │   │   └── metrics.py          # Prometheus-compatible latency & throughput trackers
-│   ├── persistence/            # PostgreSQL persistence & audit storage
+│   ├── persistence/            # SQLAlchemy persistence & audit storage
 │   │   ├── database.py         # Async SQLAlchemy 2.0 engine & session maker
 │   │   ├── models.py           # TaskModel, WorkerModel, DLQEntry
 │   │   └── repository.py       # Asynchronous CRUD repositories
@@ -154,9 +153,9 @@ CelerLite/
 │   │   ├── pool.py             # Multi-process pool manager & crash supervisor
 │   │   └── worker.py           # Worker loop, execution & acknowledgment
 │   └── config.py               # Pydantic Settings configuration
-├── dashboard/                  # Glassmorphic Real-Time UI (HTML5, CSS3, JS)
+├── dashboard/                  # CRM and task operations UI (HTML5, CSS3, JS)
 │   ├── index.html              # Dashboard layout & KPI cards
-│   ├── styles.css              # Dark-mode glassmorphic design system
+│   ├── styles.css              # Responsive workspace design system
 │   └── app.js                  # WebSocket stream & Chart.js dynamic updates
 ├── docker/                     # Containerization
 │   └── Dockerfile              # Multi-stage optimized Python container
@@ -168,7 +167,7 @@ CelerLite/
 │   ├── run_api.py              # Start FastAPI server
 │   ├── run_worker.py           # Start Worker Pool
 │   └── submit_demo_tasks.py    # Demo workload generator
-├── tests/                      # Automated test suite (46 tests)
+├── tests/                      # Unit, integration, and reliability tests
 │   ├── unit/                   # Unit tests (priority, rate limiter, broker, api)
 │   ├── chaos/                  # Worker crash & recovery simulation tests
 │   └── conftest.py             # Shared fixtures & test database
@@ -186,6 +185,12 @@ Access the live deployment:
 - **Console UI**: [https://celerlite.onrender.com/](https://celerlite.onrender.com/)
 - **Swagger REST Docs**: [https://celerlite.onrender.com/docs](https://celerlite.onrender.com/docs)
 - **Prometheus Metrics**: [https://celerlite.onrender.com/api/v1/metrics](https://celerlite.onrender.com/api/v1/metrics)
+
+### Access, demo, and persistence
+
+- The sign-in screen has a small **Preview the demo** action. Demo sessions receive a short-lived, read-only cookie and synthetic CRM data stored in a database separate from private workspace records. CRM writes and task, worker, metrics, and dead-letter APIs are unavailable in demo mode.
+- Private workspace access is allowlisted through Supabase Auth. Public self-signup is disabled. Configure `CELERLITE_SUPABASE_URL`, `CELERLITE_SUPABASE_PUBLISHABLE_KEY`, `CELERLITE_AUTH_ALLOWED_USER_IDS`, and `CELERLITE_AUTH_PUBLIC_ORIGIN`; Google sign-in also requires the Google provider and callback allowlist in Supabase. See [authentication setup](docs/AUTHENTICATION.md).
+- The Render free service has no persistent local disk. Without a separately configured durable `CELERLITE_DATABASE_URL` or `DATABASE_URL`, private CRM and task records can disappear after a restart. Demo data is synthetic and can be recreated from seed data.
 
 ---
 
@@ -304,7 +309,7 @@ vip_task.revoke()
 | `GET`, `POST` | `/api/v1/crm/accounts` | Manage corporate accounts directory |
 | `GET`, `POST` | `/api/v1/crm/contacts` | Manage contacts linked to accounts |
 | `GET`, `POST` | `/api/v1/crm/activities` | Activity timeline (Calls, Meetings, Tasks, Notes) |
-| `POST` | `/api/v1/crm/automate` | Dispatch asynchronous AI lead scoring & drip campaigns |
+| `POST` | `/api/v1/crm/automate` | Queue transparent lead scoring, pipeline forecast, or follow-up creation |
 | `POST` | `/api/v1/tasks/submit` | Enqueue a task with priority, args, and timeout |
 | `GET` | `/api/v1/tasks/{task_id}` | Retrieve task state, error messages, and timing |
 | `GET` | `/api/v1/tasks/{task_id}/result`| Fast-path retrieval of completed result from Redis |
@@ -315,7 +320,7 @@ vip_task.revoke()
 | `POST` | `/api/v1/dlq/{entry_id}/replay` | Re-queue a failed task with reset retry counter |
 | `POST` | `/api/v1/dlq/replay-all` | Bulk-replay all dead-lettered tasks |
 | `GET` | `/api/v1/metrics` | Prometheus-compatible telemetry snapshot |
-| `GET` | `/health` | Health check with Redis and database connectivity |
+| `GET` | `/health` | Broker and database connectivity, configured auth, and demo availability |
 
 ### WebSocket Endpoint
 
@@ -365,14 +370,16 @@ pytest --cov=celerlite --cov-report=term-missing
 
 ## Resume Bullet Points for Software Engineers
 
-If you are showcasing CelerLite on your resume, LinkedIn, or GitHub portfolio, here are high-impact, STAR-formatted bullet points:
+Use only measurements and features you have personally re-verified before making resume claims. The checked-in local broker workload in [docs/RELIABILITY.md](docs/RELIABILITY.md) records 10,000 reserve-and-ack operations at 3,079.1 messages/sec with no missing or duplicate messages; it does not measure end-to-end task execution or customer impact.
 
-- **Engineered CelerLite**, a high-throughput distributed task queue in Python 3.11 & FastAPI, sustaining **6,400+ tasks/sec** with sub-millisecond P50 latency (0.42ms) across multi-process worker pools.
-- **Architected at-least-once delivery semantics** via late acknowledgment (`TASK_ACK_LATE`) and Redis-backed unacknowledged queues, eliminating task loss during abrupt worker terminations.
-- **Implemented multi-tier strict priority scheduling** (CRITICAL, HIGH, NORMAL, LOW) and distributed sliding-window token bucket rate limiters using Redis Sorted Sets to prevent worker starvation and API throttling.
-- **Built fault-tolerant retry policies** with exponential backoff, jitter, and an automated Dead Letter Queue (DLQ) with granular REST APIs and UI capabilities for zero-loss error analysis and bulk task replay.
-- **Developed real-time observability telemetry** combining Redis Pub/Sub WebSocket event streaming, Prometheus metrics, and a responsive glassmorphic dark-mode monitoring dashboard.
-- **Containerized full stack with Docker Compose** and established a GitHub Actions CI pipeline running unit, integration, and chaos worker-crash tests across Python 3.11 and 3.12.
+Possible technically accurate bullets after reviewing the current implementation:
+
+- Built a Redis-backed Python task engine with atomic reservation, priority handling, retries, worker recovery, and a dead-letter queue; documented its at-least-once delivery boundary.
+- Measured a 10,000-message local broker workload at 3,079 messages/sec with zero missing or duplicate messages across the test run; broker reserve-and-ack only, not end-to-end execution.
+- Added queue-backed CRM workflows for explainable lead-fit scoring, probability-weighted pipeline snapshots, and idempotent follow-up task creation.
+- Implemented allowlisted Supabase sign-in and an isolated, read-only recruiter preview using synthetic CRM data.
+
+These describe engineering scope and a local workload, not proven business impact. Add customer or operational impact only after collecting real usage data.
 
 ---
 

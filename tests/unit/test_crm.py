@@ -169,6 +169,7 @@ async def test_crm_api_endpoints(crm_app):
         assert put_res.json()["stage"] == "Negotiation"
 
         # Automation endpoint
-        auto_res = await client.post("/api/v1/crm/automate", json={"action": "calculate_deal_probabilities"})
+        auto_res = await client.post("/api/v1/crm/automate", json={"action": "pipeline_forecast"})
         assert auto_res.status_code == 200
-        assert auto_res.json()["status"] == "QUEUED"
+        assert auto_res.json()["status"] == "PENDING"
+        assert auto_res.json()["queue"] == "crm"

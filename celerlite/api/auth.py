@@ -8,6 +8,8 @@ import hashlib
 import hmac
 import json
 import secrets
+import time
+from collections import deque
 from urllib.parse import urlencode, urlsplit
 
 import httpx
@@ -16,10 +18,18 @@ from fastapi.responses import RedirectResponse
 from pydantic import BaseModel, Field
 
 from celerlite.config import config
+from celerlite.persistence.database import demo_database_isolated
 
 router = APIRouter(prefix='/auth', tags=['Authentication'])
 COOKIE = 'celerlite_session'
 PKCE_COOKIE = 'celerlite_pkce'
+DEMO_COOKIE = 'celerlite_demo'
+_demo_sessions: dict[str, float] = {}
+_demo_attempts: dict[str, deque[float]] = {}
+_DEMO_ATTEMPT_LIMIT = 20
+_DEMO_ATTEMPT_WINDOW_SECONDS = 60
+_DEMO_RATE_BUCKET_LIMIT = 4096
+_DEMO_SESSION_LIMIT = 10000
 
 
 class LoginRequest(BaseModel):
@@ -57,6 +67,51 @@ def is_configured():
 def valid_origin(origin):
     return bool(origin and config.AUTH_PUBLIC_ORIGIN and
                 hmac.compare_digest(origin, config.AUTH_PUBLIC_ORIGIN.rstrip('/')))
+
+
+def demo_available():
+    return bool(config.DEMO_ENABLED and demo_database_isolated())
+
+
+def _demo_session_key(token: str) -> str:
+    return hashlib.sha256(token.encode('utf-8')).hexdigest()
+
+
+def valid_demo_session(token: str | None) -> bool:
+    if not token or not demo_available():
+        return False
+    key = _demo_session_key(token)
+    expires_at = _demo_sessions.get(key)
+    if expires_at is None:
+        return False
+    if expires_at <= time.monotonic():
+        _demo_sessions.pop(key, None)
+        return False
+    return True
+
+
+def _remember_demo_session(token: str, ttl: int) -> None:
+    now = time.monotonic()
+    for key, expires_at in list(_demo_sessions.items()):
+        if expires_at <= now:
+            _demo_sessions.pop(key, None)
+    if len(_demo_sessions) >= _DEMO_SESSION_LIMIT:
+        raise HTTPException(503, 'The recruiter demo is at capacity. Please try again later.')
+    _demo_sessions[_demo_session_key(token)] = now + ttl
+
+
+def _allow_demo_attempt(client_key: str) -> bool:
+    """Bound anonymous demo starts by source and cap the limiter registry."""
+    now = time.monotonic()
+    if client_key not in _demo_attempts and len(_demo_attempts) >= _DEMO_RATE_BUCKET_LIMIT:
+        _demo_attempts.pop(next(iter(_demo_attempts)))
+    attempts = _demo_attempts.setdefault(client_key, deque())
+    while attempts and attempts[0] <= now - _DEMO_ATTEMPT_WINDOW_SECONDS:
+        attempts.popleft()
+    if len(attempts) >= _DEMO_ATTEMPT_LIMIT:
+        return False
+    attempts.append(now)
+    return True
 
 
 async def verified_user(token):
@@ -113,6 +168,8 @@ async def google_callback(request: Request, code: str = ''):
     response.headers['Referrer-Policy'] = 'no-referrer'
     response.delete_cookie(PKCE_COOKIE, path='/auth/google/callback', secure=config.AUTH_COOKIE_SECURE,
                            httponly=True, samesite='lax')
+    response.delete_cookie(DEMO_COOKIE, path='/', secure=config.AUTH_COOKIE_SECURE,
+                           httponly=True, samesite='strict')
     verifier = request.cookies.get(PKCE_COOKIE)
     if not is_configured() or not code or not verifier or len(code) > 4096 or len(verifier) > 128:
         return response
@@ -128,6 +185,8 @@ async def google_callback(request: Request, code: str = ''):
         ttl = min(max(int(payload.get('expires_in', 3600)), 1), 3600)
         response.set_cookie(COOKIE, token, max_age=ttl, httponly=True, secure=config.AUTH_COOKIE_SECURE,
                             samesite='strict', path='/')
+        response.delete_cookie(DEMO_COOKIE, path='/', secure=config.AUTH_COOKIE_SECURE,
+                               httponly=True, samesite='strict')
         response.headers['location'] = '/'
     except (httpx.HTTPError, ValueError, TypeError):
         pass
@@ -152,6 +211,8 @@ async def login(body: LoginRequest, request: Request, response: Response):
         ttl = min(max(int(payload.get('expires_in', 3600)), 1), 3600)
         response.set_cookie(COOKIE, token, max_age=ttl, httponly=True, secure=config.AUTH_COOKIE_SECURE,
                             samesite='strict', path='/')
+        response.delete_cookie(DEMO_COOKIE, path='/', secure=config.AUTH_COOKIE_SECURE,
+                               httponly=True, samesite='strict')
         response.headers['Cache-Control'] = 'no-store'
         return {'user': user}
     except (httpx.HTTPError, ValueError, TypeError):
@@ -163,18 +224,51 @@ async def session(request: Request, response: Response):
     response.headers['Cache-Control'] = 'no-store'
     if not config.AUTH_REQUIRED:
         return {'user': {'email': 'Guest demo'}, 'demo': True, 'read_only': config.DEMO_READ_ONLY}
-    if not is_configured():
-        raise HTTPException(503, 'Sign-in is not configured')
+    if valid_demo_session(request.cookies.get(DEMO_COOKIE)):
+        return {'user': {'email': 'Demo viewer'}, 'demo': True, 'read_only': True,
+                'auth_required': True, 'auth_configured': is_configured(), 'demo_available': True}
     user = await verified_user(request.cookies.get(COOKIE))
-    if not user:
-        raise HTTPException(401, 'Sign in required')
-    return {'user': user}
+    return {'user': user, 'demo': False, 'read_only': False, 'auth_required': True,
+            'auth_configured': is_configured(), 'demo_available': demo_available()}
+
+
+@router.post('/demo')
+async def start_demo(request: Request, response: Response):
+    """Create a short-lived, read-only recruiter session over synthetic data."""
+    if not valid_origin(request.headers.get('origin')):
+        raise HTTPException(403, 'Invalid request origin')
+    client_key = request.client.host if request.client else 'unknown'
+    if not _allow_demo_attempt(client_key):
+        raise HTTPException(429, 'Too many demo requests. Please wait a minute and try again.')
+    if not demo_available():
+        raise HTTPException(503, 'The isolated demo workspace is not configured')
+    try:
+        from celerlite.persistence.crm_repository import CRMRepository
+        from celerlite.persistence.database import ensure_demo_db_ready, get_session, use_demo_database
+        await ensure_demo_db_ready()
+        with use_demo_database():
+            async with get_session() as session:
+                await CRMRepository(session).seed_demo_data_if_empty()
+    except Exception:
+        raise HTTPException(503, 'The isolated demo workspace is unavailable')
+    ttl = min(max(int(config.DEMO_SESSION_TTL), 60), 86400)
+    token = secrets.token_urlsafe(32)
+    _remember_demo_session(token, ttl)
+    response.set_cookie(DEMO_COOKIE, token, max_age=ttl, httponly=True,
+                        secure=config.AUTH_COOKIE_SECURE, samesite='strict', path='/')
+    response.headers['Cache-Control'] = 'no-store'
+    return {'user': {'email': 'Demo viewer'}, 'demo': True, 'read_only': True,
+            'expires_in': ttl}
 
 
 @router.post('/logout')
 async def logout(request: Request, response: Response):
     if not valid_origin(request.headers.get('origin')):
         raise HTTPException(403, 'Invalid request origin')
+    demo_token = request.cookies.get(DEMO_COOKIE)
+    if demo_token:
+        _demo_sessions.pop(_demo_session_key(demo_token), None)
     response.delete_cookie(COOKIE, path='/', secure=config.AUTH_COOKIE_SECURE, httponly=True, samesite='strict')
+    response.delete_cookie(DEMO_COOKIE, path='/', secure=config.AUTH_COOKIE_SECURE, httponly=True, samesite='strict')
     response.headers['Cache-Control'] = 'no-store'
     return {'status': 'signed out'}
