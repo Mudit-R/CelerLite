@@ -24,6 +24,7 @@ class QueueBroker:
 
     async def acknowledge(self, queue_name, raw):
         self.acknowledged.append((queue_name, raw))
+        return True
 
     async def is_revoked(self, task_id):
         return False
@@ -31,8 +32,9 @@ class QueueBroker:
     async def publish_event(self, event):
         return None
 
-    async def store_result(self, task_id, result, ttl):
+    async def complete_reserved(self, queue_name, raw, task_id, result, ttl):
         self.results.append((task_id, result, ttl))
+        return await self.acknowledge(queue_name, raw)
 
 
 def task_payload(queue_name, *, task_name="tests.worker_queues.noop", **kwargs):
@@ -114,3 +116,20 @@ async def test_retry_replaces_the_reservation_in_the_original_queue():
     args = worker._broker.replace_reserved.await_args.args
     assert args[0] == "crm"
     assert args[1] == raw
+
+
+async def test_stale_delivery_does_not_publish_worker_success():
+    register_task("tests.worker_queues.noop", lambda: "finished")
+    worker = Worker("stale-worker")
+    raw = task_payload("default")
+    worker._broker = AsyncMock()
+    worker._broker.dequeue.return_value = raw
+    worker._broker.is_revoked.return_value = False
+    worker._broker.complete_reserved.return_value = False
+    worker._update_task_status = AsyncMock()
+
+    await worker._process_one()
+
+    assert worker._tasks_processed == 0
+    assert [call.args[1] for call in worker._update_task_status.await_args_list] == ["RUNNING"]
+    assert [call.args[0]["event"] for call in worker._broker.publish_event.await_args_list] == ["task_started"]

@@ -38,16 +38,32 @@ python -m benchmarks.broker_reliability --redis-url redis://localhost:6379/15 --
 On PowerShell set the environment variable with `$env:CELERLITE_TEST_REDIS_URL`.
 Tests and benchmark use UUID-named queues, never FLUSHDB.
 
+## Delivery receipts, 2026-11-12
+
+- Each Redis dequeue gives the in-flight delivery a new receipt. Acknowledge,
+  reject, and retry only update the matching receipt. When recovery requeues
+  work, the next dequeue gives it a different receipt, even for identical bytes.
+- The Redis worker publishes a successful result and acknowledges its receipt
+  in one Lua transition. A late worker cannot clear the active reservation or
+  publish a result after its own reservation was recovered.
+- Pending payloads keep the same format. The recovery method understands both
+  the old processing lists and the new receipt-based lists. Consumers should
+  pass the original dequeue object to the broker rather than a copy of its bytes.
+- Fifteen real Redis integration cases passed, including reassignment,
+  identical concurrent payloads, and recovery of old-format entries.
+  The [receipt-aware run](../benchmarks/broker_results_20261112.json) completed
+  the local 10,000-message reserve-and-ack workload at 2,091.5 messages/sec,
+  with no missing or duplicate completions.
+
 ## Boundaries
 
 This remains an **at-least-once** list-based broker. Handlers must make business
 side effects idempotent. Visibility timeouts must exceed task duration; a live
-slow worker can otherwise overlap redelivery. The current API does not expose
-delivery receipts/fencing tokens, and these changes do not establish exactly-once
-effects or safe late acknowledgements after lease expiry. A future receipt/lease
-API would address those cases. The Lua scripts target standalone Redis, not Redis
-Cluster. They process each priority's in-flight list atomically; very large lists
-should use bounded recovery batches in a future revision.
+slow worker can otherwise overlap redelivery. Receipts protect broker state and
+Redis result publication. They do not prevent an expired worker from executing
+task side effects or establish exactly-once execution. The Lua scripts target
+standalone Redis. They process each priority's in-flight list atomically.
+Very large lists should use bounded recovery batches in a future revision.
 Redis and the dead-letter database do not share a transaction: a crash after a
 successful dead-letter write but before acknowledgement may cause a repeated write;
 dead-letter persistence should be made idempotent in future work.

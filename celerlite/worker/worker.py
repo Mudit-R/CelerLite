@@ -7,6 +7,7 @@ import signal
 import threading
 import time
 import traceback
+from contextlib import suppress
 from datetime import datetime, timezone
 from typing import Any, Optional
 
@@ -102,8 +103,10 @@ class Worker:
         # multiprocessing spawn, parent-process task registrations are not
         # inherited by child workers.
         from celerlite.tasks.crm import register_crm_tasks
+        from celerlite.tasks.demo import register_demo_tasks
 
         register_crm_tasks()
+        register_demo_tasks()
         redis_client = self._broker.client
         self._heartbeat = HeartbeatPublisher(
             self.worker_id, redis_client, ttl=self.cfg.HEARTBEAT_TIMEOUT + 5
@@ -162,10 +165,32 @@ class Worker:
     async def _process_one(self) -> None:
         """Pull one task from any worker queue and process it."""
         queue_name, raw = await self._dequeue_next()
-        if raw is None:
+        if queue_name is None or raw is None:
             await asyncio.sleep(QUEUE_IDLE_SLEEP_SECONDS)
             return
 
+        renewal = None
+        if isinstance(self._broker, RedisBroker):
+            renewal = asyncio.create_task(self._renew_reservation(queue_name, raw))
+        try:
+            await self._process_reserved(queue_name, raw)
+        finally:
+            if renewal is not None:
+                renewal.cancel()
+                with suppress(asyncio.CancelledError):
+                    await renewal
+
+    async def _renew_reservation(self, queue_name: str, raw: bytes) -> None:
+        interval = max(0.1, self.cfg.HEARTBEAT_TIMEOUT / 3)
+        while True:
+            await asyncio.sleep(interval)
+            try:
+                if not await self._broker.renew_reservation(queue_name, raw):
+                    return
+            except Exception as exc:
+                logger.warning("reservation_renewal_failed", queue=queue_name, error_type=type(exc).__name__)
+
+    async def _process_reserved(self, queue_name: str, raw: bytes) -> None:
         try:
             message = Serializer.deserialize(raw)
         except Exception as e:
@@ -188,8 +213,8 @@ class Worker:
         # Check if revoked
         if message.revoked or await self._broker.is_revoked(message.task_id):
             logger.info("task_revoked_skip", task_id=message.task_id)
-            await self._broker.acknowledge(queue_name, raw)
-            await self._update_task_status(message.task_id, "REVOKED")
+            if await self._broker.acknowledge(queue_name, raw):
+                await self._update_task_status(message.task_id, "REVOKED")
             return
 
         # Check ETA — if not ready yet, re-enqueue and skip
@@ -223,10 +248,12 @@ class Worker:
                 duration_ms=round(duration_ms, 2),
             )
             result_bytes = Serializer.serialize_result(result_obj)
-            await self._broker.store_result(
-                message.task_id, result_bytes, ttl=self.cfg.RESULT_TTL
+            completed = await self._broker.complete_reserved(
+                queue_name, raw, message.task_id, result_bytes, ttl=self.cfg.RESULT_TTL
             )
-            await self._broker.acknowledge(queue_name, raw)
+            if not completed:
+                logger.warning("completion_reservation_missing", task_id=message.task_id)
+                return
 
             self._tasks_processed += 1
             metrics.record_completed(duration_ms)
@@ -335,7 +362,9 @@ class Worker:
                 error_traceback=tb,
             )
             await self._save_to_dlq(dlq_data)
-            await self._broker.acknowledge(queue_name, raw)
+            if not await self._broker.acknowledge(queue_name, raw):
+                logger.warning("dead_letter_reservation_missing", task_id=message.task_id)
+                return
             metrics.record_dead_lettered()
             await self._broker.publish_event({
                 "event": "task_dead_lettered",

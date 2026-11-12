@@ -37,11 +37,11 @@ async def test_app(monkeypatch):
                 raise
 
     # Patch get_session in routes
-    db_mod.get_session = override_get_session
-    tasks_route_mod.get_session = override_get_session
-    dlq_route_mod.get_session = override_get_session
-    workers_route_mod.get_session = override_get_session
-    metrics_route_mod.get_session = override_get_session
+    monkeypatch.setattr(db_mod, "get_session", override_get_session)
+    monkeypatch.setattr(tasks_route_mod, "get_session", override_get_session)
+    monkeypatch.setattr(dlq_route_mod, "get_session", override_get_session)
+    monkeypatch.setattr(workers_route_mod, "get_session", override_get_session)
+    monkeypatch.setattr(metrics_route_mod, "get_session", override_get_session)
 
     mock_broker = AsyncMock()
     mock_broker.enqueue = AsyncMock(return_value="celerlite:queue:default:normal")

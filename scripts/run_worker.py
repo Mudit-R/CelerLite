@@ -28,7 +28,7 @@ def main():
     print("\n" + "=" * 60)
     print("[+] CelerLite Worker Pool")
     print(f"[*] Concurrency: {config.WORKER_CONCURRENCY} worker processes")
-    print(f"[*] Redis Broker: {config.REDIS_URL}")
+    print("[*] Redis broker configured")
     print("=" * 60 + "\n")
 
     pool = WorkerPool(config)
@@ -45,7 +45,7 @@ def main():
     try:
         pool.start()
     except Exception as e:
-        print(f"\n[!] Unable to connect to Redis at {config.REDIS_URL}: {e}")
+        print(f"\n[!] Unable to start the worker pool: {type(e).__name__}")
         print("[*] If you want to run CelerLite without external Redis, run:")
         print("    python run.py")
         print("    (This runs the server with the embedded engine and dashboard)\n")

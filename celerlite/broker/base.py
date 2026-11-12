@@ -24,12 +24,12 @@ class BaseBroker(ABC):
         """Blocking dequeue across all priority sub-queues. Returns raw bytes or None."""
 
     @abstractmethod
-    async def acknowledge(self, queue_name: str, raw_message: bytes) -> None:
-        """Acknowledge successful processing — remove from processing queue."""
+    async def acknowledge(self, queue_name: str, raw_message: bytes) -> bool:
+        """Acknowledge a reservation. Return whether it was still active."""
 
     @abstractmethod
-    async def reject(self, queue_name: str, raw_message: bytes, requeue: bool = True) -> None:
-        """Reject a message — requeue or discard."""
+    async def reject(self, queue_name: str, raw_message: bytes, requeue: bool = True) -> bool:
+        """Requeue or discard a reservation. Return whether it was still active."""
 
     @abstractmethod
     async def store_result(self, task_id: str, result: bytes, ttl: int = 86400) -> None:

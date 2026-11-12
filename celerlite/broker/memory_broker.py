@@ -150,13 +150,16 @@ class InMemoryBroker(BaseBroker):
 
         return None
 
-    async def acknowledge(self, queue_name: str, raw_message: bytes) -> None:
-        self._processing[queue_name].pop(raw_message, None)
+    async def acknowledge(self, queue_name: str, raw_message: bytes) -> bool:
+        return self._processing[queue_name].pop(raw_message, None) is not None
 
-    async def reject(self, queue_name: str, raw_message: bytes, requeue: bool = True) -> None:
+    async def reject(self, queue_name: str, raw_message: bytes, requeue: bool = True) -> bool:
         reservation = self._processing[queue_name].pop(raw_message, None)
-        if requeue and reservation is not None:
+        if reservation is None:
+            return False
+        if requeue:
             await self.enqueue(queue_name, raw_message, priority=reservation[1])
+        return True
 
     async def replace_reserved(self, queue_name: str, raw_message: bytes,
                                replacement: bytes, priority: int) -> bool:

@@ -57,7 +57,7 @@ async def lifespan(app: FastAPI):
             redis_broker = RedisBroker(config)
             await redis_broker.connect()
             _broker = redis_broker
-            logger.info("redis_connected", url=config.REDIS_URL)
+            logger.info("redis_connected")
         except Exception as e:
             logger.warning(
                 "redis_unavailable_fallback_memory",

@@ -1,5 +1,6 @@
 """Worker Pool Manager — spawns, monitors, and replaces workers."""
 
+import asyncio
 import multiprocessing
 import os
 import signal
@@ -8,15 +9,17 @@ import time
 import uuid
 from typing import Optional
 
-import redis.asyncio as aioredis
-
 from celerlite.broker.redis_broker import RedisBroker
 from celerlite.config import CelerLiteConfig, config
 from celerlite.observability.logger import get_logger
-from celerlite.worker.heartbeat import HeartbeatMonitor
-from celerlite.worker.worker import Worker
+from celerlite.worker.worker import Worker, configured_worker_queues
 
 logger = get_logger(__name__)
+
+
+def _run_worker(worker_id: str, cfg: CelerLiteConfig) -> None:
+    # Create the worker in the child so spawn never tries to pickle its thread lock.
+    Worker(worker_id=worker_id, cfg=cfg).run()
 
 
 class WorkerProcess:
@@ -51,17 +54,9 @@ class WorkerPool:
         self._lock = threading.Lock()
         self._stop_event = threading.Event()
         self._monitor_thread: Optional[threading.Thread] = None
-        self._redis_client: Optional[aioredis.Redis] = None
 
     def start(self) -> None:
         """Spawn all workers and start the heartbeat monitor thread."""
-        import asyncio
-
-        # Create a sync Redis client for the pool manager
-        import redis as sync_redis
-
-        self._sync_redis = sync_redis.Redis.from_url(self.cfg.REDIS_URL)
-
         logger.info(
             "pool_starting",
             concurrency=self.cfg.WORKER_CONCURRENCY,
@@ -112,9 +107,9 @@ class WorkerPool:
     def _spawn_worker(self) -> WorkerProcess:
         """Create and start a new worker process."""
         worker_id = f"worker-{uuid.uuid4().hex[:8]}"
-        worker = Worker(worker_id=worker_id, cfg=self.cfg)
         process = multiprocessing.Process(
-            target=worker.run,
+            target=_run_worker,
+            args=(worker_id, self.cfg),
             name=worker_id,
             daemon=True,
         )
@@ -129,10 +124,7 @@ class WorkerPool:
 
     def _monitor_loop(self) -> None:
         """Background thread: periodically check for dead workers and replace them."""
-        while not self._stop_event.is_set():
-            time.sleep(self.cfg.HEARTBEAT_INTERVAL)
-            if self._stop_event.is_set():
-                break
+        while not self._stop_event.wait(self.cfg.HEARTBEAT_INTERVAL):
             try:
                 self._check_and_replace_dead_workers()
                 self._recover_stale_tasks_sync()
@@ -156,15 +148,19 @@ class WorkerPool:
                 self._spawn_worker()
 
     def _recover_stale_tasks_sync(self) -> None:
-        """Synchronously recover stale tasks using the sync Redis client."""
+        """Requeue expired Redis reservations on each configured worker queue."""
+        asyncio.run(self._recover_stale_tasks())
+
+    async def _recover_stale_tasks(self) -> None:
+        broker = RedisBroker(self.cfg)
         try:
-            # Use the sync redis client to check the processing queue
-            timeout = self.cfg.HEARTBEAT_TIMEOUT
-            # Simple check: if any tasks have been in processing queue > timeout, move them back
-            # Full implementation uses the async broker; here we just log
-            logger.debug("stale_task_check_completed")
-        except Exception as e:
-            logger.error("stale_recovery_error", error=str(e))
+            await broker.connect()
+            for queue in configured_worker_queues():
+                recovered = await broker.recover_stale_tasks(queue, self.cfg.HEARTBEAT_TIMEOUT)
+                if recovered:
+                    logger.info("stale_tasks_recovered", queue=queue, count=recovered)
+        finally:
+            await broker.disconnect()
 
     def get_pool_status(self) -> dict:
         """Return status of all workers."""

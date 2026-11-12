@@ -8,13 +8,14 @@ Architecture:
     celerlite:queue:{name}:low
 
   Each priority sub-queue has a corresponding processing queue:
-    celerlite:processing:{name}:{priority}
+    celerlite:processing_v2:{name}:{priority}
 
-  Dequeue: a Lua script moves work to processing and records server time in
-  one atomic reservation. Idle consumers check every priority, not just critical.
+  Dequeue: a Lua script records the payload with a unique delivery receipt and
+  server timestamp. Pending messages keep their original wire format.
 
-  Acknowledge/reject/recover: Lua transitions keep processing lists, timestamps
-  and requeued work consistent. Business side effects must still be idempotent.
+  Acknowledge/reject/retry: Lua updates only the specified delivery. Recovery
+  removes that receipt before requeueing the original payload. Business side
+  effects must still be idempotent.
 
   Results: stored in Redis string keys with TTL:
     celerlite:result:{task_id}
@@ -26,27 +27,29 @@ Architecture:
 import asyncio
 import json
 import time
+import uuid
 from datetime import datetime, timezone
 from typing import Optional
 
 import redis.asyncio as aioredis
 
 from celerlite.broker.base import BaseBroker
-from celerlite.broker.serializer import TaskMessage
 from celerlite.config import CelerLiteConfig
 from celerlite.observability.logger import get_logger
 from celerlite.scheduler.priority import (
     Priority,
-    get_priority_dequeue_order,
     get_priority_queue_name,
 )
 
 logger = get_logger(__name__)
 
-PROCESSING_KEY = "celerlite:processing:{queue}:{priority}"
+PROCESSING_KEY = "celerlite:processing_v2:{queue}:{priority}"
 EVENTS_CHANNEL = "celerlite:events"
 RESULT_KEY = "celerlite:result:{task_id}"
-TASK_TIMESTAMP_KEY = "celerlite:proc_ts:{queue}:{priority}"
+TASK_TIMESTAMP_KEY = "celerlite:proc_ts_v2:{queue}:{priority}"
+LEGACY_PROCESSING_KEY = "celerlite:processing:{queue}:{priority}"
+LEGACY_TIMESTAMP_KEY = "celerlite:proc_ts:{queue}:{priority}"
+RECEIPT_LENGTH = 32  # UUID encoded as ASCII hex
 
 # A reservation and its timestamp must be visible together. All keys belong to
 # one logical queue; Redis Cluster is not supported by this list-based broker.
@@ -54,30 +57,36 @@ RESERVE_SCRIPT = """
 local clock = redis.call('TIME')
 local now = tonumber(clock[1]) + tonumber(clock[2]) / 1000000
 for i = 1, #KEYS, 3 do
-    local message = redis.call('RPOPLPUSH', KEYS[i], KEYS[i + 1])
+    local message = redis.call('RPOP', KEYS[i])
     if message then
-        redis.call('HSET', KEYS[i + 2], message, now)
-        return message
+        local entry = ARGV[1] .. message
+        redis.call('LPUSH', KEYS[i + 1], entry)
+        redis.call('HSET', KEYS[i + 2], entry, now)
+        return {message, i}
     end
 end
 return false
 """
 
 FINISH_SCRIPT = """
-local removed = redis.call('LREM', KEYS[1], 1, ARGV[1])
-if removed > 0 then
-    redis.call('HDEL', KEYS[2], ARGV[1])
-    if ARGV[2] == 'requeue' then
-        redis.call('LPUSH', KEYS[3], ARGV[1])
-    end
+local entry = ARGV[1]
+local action = ARGV[2]
+if action == 'complete' then
+    if not redis.call('LPOS', KEYS[1], entry) then return 0 end
+    redis.call('SET', KEYS[3], ARGV[3], 'EX', ARGV[4])
 end
-return removed
+if redis.call('LREM', KEYS[1], 1, entry) == 0 then return 0 end
+redis.call('HDEL', KEYS[2], entry)
+if action == 'requeue' then
+    redis.call('LPUSH', KEYS[3], ARGV[3])
+end
+return 1
 """
 
-REPLACE_SCRIPT = """
-if redis.call('LREM', KEYS[1], 1, ARGV[1]) == 0 then return 0 end
-redis.call('HDEL', KEYS[2], ARGV[1])
-redis.call('LPUSH', KEYS[3], ARGV[2])
+RENEW_SCRIPT = """
+if redis.call('HEXISTS', KEYS[1], ARGV[1]) == 0 then return 0 end
+local clock = redis.call('TIME')
+redis.call('HSET', KEYS[1], ARGV[1], tonumber(clock[1]) + tonumber(clock[2]) / 1000000)
 return 1
 """
 
@@ -89,7 +98,7 @@ for _, message in ipairs(redis.call('LRANGE', KEYS[1], 0, -1)) do
     local reserved = redis.call('HGET', KEYS[2], message)
     if not reserved or now - tonumber(reserved) >= tonumber(ARGV[1]) then
         if redis.call('LREM', KEYS[1], 1, message) > 0 then
-            redis.call('LPUSH', KEYS[3], message)
+            redis.call('LPUSH', KEYS[3], string.sub(message, tonumber(ARGV[2])))
             redis.call('HDEL', KEYS[2], message)
             recovered = recovered + 1
         end
@@ -97,6 +106,19 @@ for _, message in ipairs(redis.call('LRANGE', KEYS[1], 0, -1)) do
 end
 return recovered
 """
+
+
+class _RedisDelivery(bytes):
+    """Raw payload carrying the identity of this particular reservation."""
+
+    receipt: bytes
+    priority: Priority
+
+    def __new__(cls, payload: bytes, receipt: bytes, priority: Priority) -> "_RedisDelivery":
+        delivery = super().__new__(cls, payload)
+        delivery.receipt = receipt
+        delivery.priority = priority
+        return delivery
 
 
 class RedisBroker(BaseBroker):
@@ -115,7 +137,7 @@ class RedisBroker(BaseBroker):
         )
         self._client = aioredis.Redis(connection_pool=self._pool)
         await self._client.ping()
-        logger.info("redis_connected", url=self.config.REDIS_URL)
+        logger.info("redis_connected")
 
     async def disconnect(self) -> None:
         if self._client:
@@ -139,71 +161,77 @@ class RedisBroker(BaseBroker):
         return queue_key
 
     async def dequeue(self, queue_name: str, timeout: int = 5) -> Optional[bytes]:
-        """Poll all priorities, atomically reserving a message and timestamp.
+        """Poll all priorities and return bytes carrying a delivery receipt.
 
         Positive timeout bounds the wait; zero waits until work arrives. Short
         cancellable sleeps avoid blocking exclusively on the critical queue.
+        Pass the returned object unchanged to acknowledgement or retry methods.
         """
         if timeout < 0:
             raise ValueError('timeout must be non-negative')
         keys = []
-        for pending in get_priority_dequeue_order(queue_name):
-            suffix = pending.rsplit(':', 1)[1]
-            keys.extend([pending,
-                         PROCESSING_KEY.format(queue=queue_name, priority=suffix),
-                         TASK_TIMESTAMP_KEY.format(queue=queue_name, priority=suffix)])
+        priorities = sorted(Priority, reverse=True)
+        for priority in priorities:
+            suffix = priority.name.lower()
+            keys.extend((
+                get_priority_queue_name(queue_name, priority),
+                PROCESSING_KEY.format(queue=queue_name, priority=suffix),
+                TASK_TIMESTAMP_KEY.format(queue=queue_name, priority=suffix),
+            ))
         deadline = time.monotonic() + timeout if timeout else None
+        receipt = uuid.uuid4().hex.encode("ascii")
         while True:
-            message = await self.client.eval(RESERVE_SCRIPT, len(keys), *keys)
-            if message is not None:
-                return message
+            reserved = await self.client.eval(RESERVE_SCRIPT, len(keys), *keys, receipt)
+            if reserved is not None:
+                payload, key_index = reserved
+                return _RedisDelivery(payload, receipt, priorities[(key_index - 1) // 3])
             remaining = deadline - time.monotonic() if deadline is not None else 0.05
             if remaining <= 0:
                 return None
             await asyncio.sleep(min(0.05, remaining))
 
-    async def acknowledge(self, queue_name: str, raw_message: bytes) -> None:
-        """Remove processed message from ALL processing queues (priority-agnostic cleanup)."""
-        for priority in Priority:
-            priority_suffix = priority.name.lower()
-            proc_key = PROCESSING_KEY.format(queue=queue_name, priority=priority_suffix)
-            ts_key = TASK_TIMESTAMP_KEY.format(queue=queue_name, priority=priority_suffix)
-            pending = get_priority_queue_name(queue_name, priority)
-            removed = await self.client.eval(FINISH_SCRIPT, 3, proc_key, ts_key,
-                                             pending, raw_message, 'ack')
-            if removed:
-                return
+    async def _finish_reservation(
+        self,
+        queue_name: str,
+        delivery: bytes,
+        action: str,
+        destination: str | None = None,
+        *args: bytes | int,
+    ) -> bool:
+        if not isinstance(delivery, _RedisDelivery):
+            return False
+        suffix = delivery.priority.name.lower()
+        return bool(await self.client.eval(
+            FINISH_SCRIPT, 3,
+            PROCESSING_KEY.format(queue=queue_name, priority=suffix),
+            TASK_TIMESTAMP_KEY.format(queue=queue_name, priority=suffix),
+            destination or get_priority_queue_name(queue_name, delivery.priority),
+            delivery.receipt + delivery, action, *args,
+        ))
 
-    async def reject(self, queue_name: str, raw_message: bytes, requeue: bool = True) -> None:
-        """Reject a message — remove from processing. If requeue, push back to queue."""
-        for priority in Priority:
-            suffix = priority.name.lower()
-            removed = await self.client.eval(
-                FINISH_SCRIPT, 3,
-                PROCESSING_KEY.format(queue=queue_name, priority=suffix),
-                TASK_TIMESTAMP_KEY.format(queue=queue_name, priority=suffix),
-                get_priority_queue_name(queue_name, priority), raw_message,
-                'requeue' if requeue else 'ack')
-            if removed:
-                return
+    async def acknowledge(self, queue_name: str, raw_message: bytes) -> bool:
+        """Remove only the supplied reservation, returning false if it is gone."""
+        return await self._finish_reservation(queue_name, raw_message, "ack")
+
+    async def reject(self, queue_name: str, raw_message: bytes, requeue: bool = True) -> bool:
+        """Discard or requeue only the supplied reservation."""
+        if requeue:
+            return await self._finish_reservation(queue_name, raw_message, "requeue", None, raw_message)
+        return await self.acknowledge(queue_name, raw_message)
 
     async def replace_reserved(self, queue_name: str, raw_message: bytes,
                                replacement: bytes, priority: int) -> bool:
-        """Atomically replace a reserved message with a modified retry payload.
-
-        Returns false when recovery or another consumer already removed it.
-        """
+        """Replace an active reservation with a modified retry payload."""
         pending = get_priority_queue_name(queue_name, Priority(priority))
-        for source_priority in Priority:
-            suffix = source_priority.name.lower()
-            moved = await self.client.eval(
-                REPLACE_SCRIPT, 3,
-                PROCESSING_KEY.format(queue=queue_name, priority=suffix),
-                TASK_TIMESTAMP_KEY.format(queue=queue_name, priority=suffix),
-                pending, raw_message, replacement)
-            if moved:
-                return True
-        return False
+        return await self._finish_reservation(queue_name, raw_message, "requeue", pending, replacement)
+
+    async def complete_reserved(
+        self, queue_name: str, raw_message: bytes, task_id: str, result: bytes, ttl: int
+    ) -> bool:
+        """Atomically write a result and acknowledge its active reservation."""
+        return await self._finish_reservation(
+            queue_name, raw_message, "complete", RESULT_KEY.format(task_id=task_id), result, ttl
+        )
 
     async def store_result(self, task_id: str, result: bytes, ttl: int = 86400) -> None:
         key = RESULT_KEY.format(task_id=task_id)
@@ -263,6 +291,12 @@ class RedisBroker(BaseBroker):
             await pubsub.aclose()
 
 
+    async def renew_reservation(self, queue_name: str, delivery: bytes) -> bool:
+        if not isinstance(delivery, _RedisDelivery):
+            return False
+        key = TASK_TIMESTAMP_KEY.format(queue=queue_name, priority=delivery.priority.name.lower())
+        return bool(await self.client.eval(RENEW_SCRIPT, 1, key, delivery.receipt + delivery))
+
     async def recover_stale_tasks(self, queue_name: str, timeout_seconds: int = 30) -> int:
         """
         Scan all processing queues for tasks that have been there longer than
@@ -275,12 +309,19 @@ class RedisBroker(BaseBroker):
 
         for priority in Priority:
             priority_suffix = priority.name.lower()
-            proc_key = PROCESSING_KEY.format(queue=queue_name, priority=priority_suffix)
-            ts_key = TASK_TIMESTAMP_KEY.format(queue=queue_name, priority=priority_suffix)
-
-            recovered += int(await self.client.eval(
-                RECOVER_SCRIPT, 3, proc_key, ts_key,
-                get_priority_queue_name(queue_name, priority), timeout_seconds))
+            pending = get_priority_queue_name(queue_name, priority)
+            # Keep legacy processing keys separate so a worker on the old
+            # format can never mistake a new receipt for a pending payload.
+            for processing, timestamps, payload_offset in (
+                (PROCESSING_KEY, TASK_TIMESTAMP_KEY, RECEIPT_LENGTH + 1),
+                (LEGACY_PROCESSING_KEY, LEGACY_TIMESTAMP_KEY, 1),
+            ):
+                recovered += int(await self.client.eval(
+                    RECOVER_SCRIPT, 3,
+                    processing.format(queue=queue_name, priority=priority_suffix),
+                    timestamps.format(queue=queue_name, priority=priority_suffix),
+                    pending, timeout_seconds, payload_offset,
+                ))
 
         return recovered
 

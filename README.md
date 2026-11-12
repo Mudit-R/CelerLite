@@ -16,12 +16,14 @@
 
 ## Table of Contents
 
-**Reliability update (2026-10-30):** atomic Redis reservations/recovery, all-priority
-waiting, atomic retry replacement, and 12 real-Redis regression tests including process-death recovery.
-A local 10,000-message broker workload completed with zero missing or duplicate
-messages. See [measured results and delivery boundaries](docs/RELIABILITY.md).
+**Interview walkthrough:** [show a task, demonstrate a stale acknowledgment, and explain the benchmark](docs/INTERVIEW_DEMO.md).
+
+The receipt-aware Redis benchmark processed 10,000 messages with 10 consumers
+at 2,091.5 messages/sec and observed zero missing or duplicate completions.
+See [measured results and delivery boundaries](docs/RELIABILITY.md).
 
 - [System Architecture](#system-architecture)
+- [Interview Demo](docs/INTERVIEW_DEMO.md)
 - [Core Engineering Highlights](#core-engineering-highlights)
 - [Performance & Benchmarks](#performance--benchmarks)
 - [Project Structure](#project-structure)
@@ -90,6 +92,7 @@ To make work recoverable after worker failures:
 - Tasks are popped from the ready queue into a dedicated unacknowledged processing registry.
 - A task is **only acknowledged and cleared from Redis after successful completion**.
 - If a worker crashes with a reserved task, recovery can re-enqueue it after the reservation expires. Delivery is at-least-once, so task handlers must make side effects idempotent.
+- A fresh delivery receipt identifies each claim. If a task is reassigned, Redis rejects an old worker's acknowledgment. In the Redis worker, the receipt check, result publication, and acknowledgment run in one Lua script.
 
 ### 3. Exponential Backoff with Full Jitter & Dead Letter Queue (DLQ)
 Transient failures are retried using truncated exponential backoff with full jitter to avoid the "thundering herd" problem:
@@ -133,7 +136,7 @@ CelerLite/
 │   │   └── websocket.py        # Real-time event streaming via Redis Pub/Sub
 │   ├── broker/                 # Queue abstraction & Redis driver
 │   │   ├── base.py             # Abstract broker interface
-│   │   ├── redis_broker.py     # Redis Streams & Lists broker implementation
+│   │   ├── redis_broker.py     # Redis lists and Lua-based delivery transitions
 │   │   └── serializer.py       # JSON & MsgPack serialization layer
 │   ├── observability/          # Logging & metrics
 │   │   ├── logger.py           # Structured JSON logger

@@ -11,17 +11,11 @@ from celerlite.observability.logger import get_logger
 from celerlite.observability.metrics import metrics
 from celerlite.persistence.database import get_session
 from celerlite.persistence.repository import TaskRepository, WorkerRepository
-from celerlite.worker.worker import get_task, register_task
+from celerlite.worker.worker import get_task
 from celerlite.tasks import register_crm_tasks
+from celerlite.tasks.demo import register_demo_tasks
 
 logger = get_logger(__name__)
-
-# Register standard demo tasks
-register_task("celerlite.demo.add", lambda a, b: a + b)
-register_task("celerlite.demo.multiply", lambda a, b: a * b)
-register_task("celerlite.demo.heavy_computation", lambda n=1000: sum(i * i for i in range(min(max(int(n), 0), 100_000))))
-register_task("celerlite.demo.send_email", lambda to, subject: f"Sent to {to}: {subject}")
-
 
 async def run_embedded_worker(
     broker: BaseBroker,
@@ -31,6 +25,7 @@ async def run_embedded_worker(
     """Continuously poll broker for tasks and execute them in-process."""
     logger.info("embedded_worker_started", worker_id=worker_id)
     register_crm_tasks()
+    register_demo_tasks()
     queues = ["default", "crm", "notifications", "analytics", "emails", "payments", "high_priority"]
     next_queue_index = 0
     processed = 0
