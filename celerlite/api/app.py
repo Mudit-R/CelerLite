@@ -20,6 +20,7 @@ logger = get_logger(__name__)
 
 # Shared broker instance for the API process
 _broker: RedisBroker = None
+_embedded_worker_active = False
 
 
 def get_broker():
@@ -38,7 +39,7 @@ def set_broker(broker: RedisBroker) -> None:
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Startup / shutdown lifecycle."""
-    global _broker
+    global _broker, _embedded_worker_active
     setup_logging(config.LOG_LEVEL, config.LOG_FORMAT)
     embedded_task = None
     stop_event = asyncio.Event()
@@ -89,6 +90,7 @@ async def lifespan(app: FastAPI):
             embedded_task = asyncio.create_task(
                 run_embedded_worker(_broker, stop_event=stop_event)
             )
+            _embedded_worker_active = True
         logger.info("api_started", host=config.API_HOST, port=config.API_PORT)
     else:
         from celerlite.broker.memory_broker import InMemoryBroker
@@ -109,6 +111,7 @@ async def lifespan(app: FastAPI):
 
     yield
     stop_event.set()
+    _embedded_worker_active = False
     if embedded_task:
         embedded_task.cancel()
         try:
@@ -121,7 +124,7 @@ async def lifespan(app: FastAPI):
 
 
 def create_app(serverless: bool = False) -> FastAPI:
-    from celerlite.api.routes import crm, dlq, metrics, tasks, workers
+    from celerlite.api.routes import crm, dlq, metrics, tasks, workers, demo_tasks
     from celerlite.api.auth import router as auth_router, verified_user, valid_origin, valid_demo_session, COOKIE, DEMO_COOKIE
     from fastapi import Depends
     from starlette.responses import JSONResponse
@@ -154,10 +157,19 @@ def create_app(serverless: bool = False) -> FastAPI:
 
         if is_api:
             if is_demo:
-                if not safe_method:
+                demo_queue_path = (
+                    request.url.path == '/api/v1/demo/tasks'
+                    or request.url.path.startswith('/api/v1/demo/tasks/')
+                )
+                if demo_queue_path and request.method == 'POST' and not valid_origin(request.headers.get('origin')):
+                    return JSONResponse({'detail': 'Invalid request origin'}, status_code=403,
+                                        headers={'Cache-Control': 'no-store'})
+                if demo_queue_path and request.method in ('GET', 'POST'):
+                    pass
+                elif not safe_method:
                     return JSONResponse({'detail': 'The recruiter demo is read-only'}, status_code=403,
                                         headers={'Cache-Control': 'no-store'})
-                if not request.url.path.startswith('/api/v1/crm/'):
+                elif not request.url.path.startswith('/api/v1/crm/'):
                     return JSONResponse({'detail': 'This endpoint is unavailable in the recruiter demo'}, status_code=403,
                                         headers={'Cache-Control': 'no-store'})
             elif config.AUTH_REQUIRED:
@@ -184,6 +196,7 @@ def create_app(serverless: bool = False) -> FastAPI:
     # REST routers
     app.include_router(crm.router, prefix="/api/v1/crm", tags=["CRM"])
     app.include_router(tasks.router, prefix="/api/v1/tasks", tags=["Tasks"])
+    app.include_router(demo_tasks.router, prefix="/api/v1/demo/tasks", tags=["Demo queue lab"])
     app.include_router(workers.router, prefix="/api/v1/workers", tags=["Workers"])
     app.include_router(dlq.router, prefix="/api/v1/dlq", tags=["Dead Letter Queue"])
     app.include_router(metrics.router, prefix="/api/v1/metrics", tags=["Metrics"])

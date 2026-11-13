@@ -162,6 +162,12 @@
           Task engine
         </span>
       </li>
+      <li class="slds-nav-item" data-tab="queue-lab" onclick="switchTab('queue-lab')" hidden>
+        <span class="tab-link">
+          <svg class="tab-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h16v5H4zM4 15h7v5H4zM15 15h5v5h-5z"></path><path d="M12 6.5h.01M7.5 17.5h.01M17.5 17.5h.01"></path></svg>
+          Queue lab
+        </span>
+      </li>
     </ul>
   </nav>
 
@@ -605,6 +611,54 @@
             </tbody>
           </table>
         </div>
+      </div>
+    </section>
+
+    <section id="tab-queue-lab" class="tab-view">
+      <div class="slds-page-header">
+        <div class="slds-page-header-title-wrapper">
+          <div class="slds-page-icon bg-blue"><span aria-hidden="true">↗</span></div>
+          <div>
+            <span class="slds-text-overline">LIVE TASK PATH / GUEST SANDBOX</span>
+            <h1 class="slds-page-header-title">Queue lab</h1>
+            <p class="workspace-intro">Submit a bounded arithmetic task and watch the embedded worker return its result.</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="queue-lab-grid">
+        <article class="slds-card queue-lab-card">
+          <div class="slds-card-header"><h2 class="slds-card-title">Run a safe task</h2><span class="queue-lab-state" id="queueLabAvailability">Checking worker…</span></div>
+          <div class="queue-lab-body">
+            <p id="queueLabMode" class="queue-lab-note">Checking the hosted worker path…</p>
+            <form id="queueLabForm" class="queue-lab-form">
+              <label>Operation<select id="queueLabOperation" class="slds-select"><option value="add">Add</option><option value="multiply">Multiply</option></select></label>
+              <label>First number<input id="queueLabLeft" class="slds-input" type="number" min="-10000" max="10000" step="1" value="20" required /></label>
+              <label>Second number<input id="queueLabRight" class="slds-input" type="number" min="-10000" max="10000" step="1" value="22" required /></label>
+              <button id="queueLabSubmit" class="slds-btn slds-btn-brand" type="submit">Enqueue task</button>
+            </form>
+            <div id="queueLabResult" class="queue-lab-result" role="status" aria-live="polite">Choose an operation, then enqueue a task.</div>
+            <p class="queue-lab-footnote">Only add and multiply are accepted. Each input is limited to −10,000 through 10,000. Jobs and results are held in memory and disappear when the service restarts.</p>
+          </div>
+        </article>
+
+        <article class="slds-card queue-lab-card">
+          <div class="slds-card-header"><h2 class="slds-card-title">Reliability design</h2><span class="queue-lab-state queue-lab-state-muted">Redis path</span></div>
+          <div class="queue-lab-body">
+            <p class="queue-lab-note">This guest task uses the hosted embedded in-memory worker. The receipt guard below is implemented and tested in the Redis broker path; it is not being simulated by this task.</p>
+            <ol class="receipt-steps">
+              <li><span>01</span><div><b>Worker A reserves</b><small>Its delivery gets receipt A.</small></div></li>
+              <li><span>02</span><div><b>Worker B reclaims</b><small>After expiry, the retry gets receipt B.</small></div></li>
+              <li><span>03</span><div><b>Stale completion is rejected</b><small>A cannot overwrite B's result.</small></div></li>
+            </ol>
+            <div class="queue-lab-links">
+              <a href="https://github.com/Mudit-R/CelerLite/blob/main/celerlite/broker/redis_broker.py" target="_blank" rel="noopener noreferrer">Receipt checks in Redis broker ↗</a>
+              <a href="https://github.com/Mudit-R/CelerLite/blob/main/tests/integration/test_redis_reliability.py" target="_blank" rel="noopener noreferrer">Stale-worker regression test ↗</a>
+              <a href="https://github.com/Mudit-R/CelerLite/blob/main/benchmarks/broker_results_20261112.json" target="_blank" rel="noopener noreferrer">Benchmark scope and result ↗</a>
+            </div>
+            <p class="queue-lab-footnote">The recorded 2,092 messages/sec result is a local reserve-and-ack benchmark. It excludes handler execution and database writes.</p>
+          </div>
+        </article>
       </div>
     </section>
 

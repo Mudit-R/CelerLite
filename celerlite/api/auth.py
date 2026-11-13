@@ -234,7 +234,7 @@ async def session(request: Request, response: Response):
 
 @router.post('/demo')
 async def start_demo(request: Request, response: Response):
-    """Create a short-lived, read-only recruiter session over synthetic data."""
+    """Create a short-lived guest session over synthetic, read-only CRM data."""
     if not valid_origin(request.headers.get('origin')):
         raise HTTPException(403, 'Invalid request origin')
     client_key = request.client.host if request.client else 'unknown'

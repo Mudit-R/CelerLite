@@ -6,9 +6,9 @@
 
 ## Show it in three minutes
 
-1. **Show the workspace.** Open the [live preview](https://celerlite.onrender.com/) and choose **Preview the demo**. It shows a synthetic CRM workspace. Use a local instance or an approved workspace account to demonstrate task submission.
-2. **Run a task.** In the local task console, select **Run Custom Task**. Enter `celerlite.demo.add`, queue `default`, positional arguments `[20, 22]`, and keyword arguments `{}`. Open the task inspector and confirm status `SUCCESS` and result `42`. Point out the task ID and saved execution details.
-3. **Show the failure case.** Run the Redis regression below. Walk through Worker A's claim, expiration, Worker B's new receipt, and the rejected completion from A. B then records the result with the current receipt.
+1. **Show the workspace.** Open the [live preview](https://celerlite.onrender.com/) and choose **Preview the demo**. The CRM records are synthetic and read-only.
+2. **Run a task.** Open **Queue lab**, keep `Add` selected, and submit `20` and `22`. The page sends an allowlisted task through the hosted in-memory broker and embedded worker, then polls its session-scoped result (`42`). This path is real task execution, but jobs and results are ephemeral and do not enter private task history.
+3. **Explain the reliability boundary.** The public Queue Lab runs on the hosted in-memory path. It does not exercise Redis receipt fencing. Show the Redis implementation and run the regression below to demonstrate why a stale worker cannot commit after reassignment.
 
 ### Start the local task console on Windows
 

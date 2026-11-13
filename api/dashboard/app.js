@@ -25,6 +25,7 @@ let engineBusy = false;
 let engineUpdatedAt = null;
 let engineQueue = '';
 let demoSession = false;
+let queueLabEnabled = false;
 
 // All API-backed CRM fields are untrusted when rendered. Keep text out of
 // HTML markup and quote identifiers before placing them in legacy handlers.
@@ -143,10 +144,28 @@ document.addEventListener('DOMContentLoaded', async () => {
       document.body.classList.add('demo-read-only');
       const banner = document.createElement('div');
       banner.className = 'demo-banner';
-      banner.textContent = 'Isolated demo · Synthetic sample data · Read-only';
+      banner.textContent = 'Isolated sample CRM · Read-only records · Queue Lab runs limited in-memory tasks';
       document.body.prepend(banner);
       document.querySelector('[data-tab="engine"]')?.setAttribute('hidden', '');
       document.getElementById('tab-engine')?.setAttribute('hidden', '');
+      try {
+        const response = await fetch('/api/v1/demo/tasks/capabilities');
+        const capability = await response.json();
+        queueLabEnabled = Boolean(response.ok && capability.available);
+        const item = document.querySelector('[data-tab="queue-lab"]');
+        item?.removeAttribute('hidden');
+        const state = document.getElementById('queueLabAvailability');
+        const mode = document.getElementById('queueLabMode');
+        if (state) state.textContent = queueLabEnabled ? 'Worker online' : 'Worker unavailable';
+        if (state) state.classList.toggle('queue-lab-state-offline', !queueLabEnabled);
+        if (mode) mode.textContent = capability.message || 'Worker availability could not be confirmed.';
+        document.getElementById('queueLabSubmit').disabled = !queueLabEnabled;
+      } catch (_) {
+        document.querySelector('[data-tab="queue-lab"]')?.removeAttribute('hidden');
+        document.getElementById('queueLabAvailability').textContent = 'Status unavailable';
+        document.getElementById('queueLabMode').textContent = 'Could not check the worker. Reload this page to try again.';
+        document.getElementById('queueLabSubmit').disabled = true;
+      }
       const liveStatus = document.getElementById('wsStatusText');
       if (liveStatus) liveStatus.textContent = 'Sample workspace';
     } else {
@@ -158,6 +177,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     return;
   }
   loadAllCRMData();
+
+  document.getElementById('queueLabForm').addEventListener('submit', submitQueueLabTask);
 
   // Auto-refresh CRM stats every 5 seconds
   setInterval(loadCRMStats, 5000);
@@ -283,6 +304,50 @@ function switchTab(tabId) {
     renderActivitiesTimeline();
   } else if (tabId === 'engine') {
     loadEngineTasks();
+  } else if (tabId === 'queue-lab') {
+    document.getElementById('queueLabOperation')?.focus();
+  }
+}
+
+async function submitQueueLabTask(event) {
+  event.preventDefault();
+  const button = document.getElementById('queueLabSubmit');
+  const output = document.getElementById('queueLabResult');
+  const operation = document.getElementById('queueLabOperation').value;
+  const left = Number(document.getElementById('queueLabLeft').value);
+  const right = Number(document.getElementById('queueLabRight').value);
+  if (!Number.isInteger(left) || !Number.isInteger(right) || Math.abs(left) > 10000 || Math.abs(right) > 10000) {
+    output.textContent = 'Enter whole numbers from −10,000 through 10,000.';
+    return;
+  }
+  button.disabled = true;
+  output.textContent = 'Submitting to the in-memory broker…';
+  try {
+    const response = await fetch('/api/v1/demo/tasks', {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({operation, left, right}),
+    });
+    const submitted = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(submitted.detail || 'Task submission failed.');
+    output.textContent = `Queued ${submitted.task_name} · ${submitted.task_id.slice(0, 8)}…`;
+    const deadline = Date.now() + 10000;
+    while (Date.now() < deadline) {
+      await new Promise(resolve => setTimeout(resolve, 350));
+      const statusResponse = await fetch(`/api/v1/demo/tasks/${encodeURIComponent(submitted.task_id)}`);
+      const status = await statusResponse.json().catch(() => ({}));
+      if (!statusResponse.ok) throw new Error(status.detail || 'Could not read task status.');
+      if (status.status === 'SUCCESS') {
+        output.textContent = `SUCCESS · ${status.task_name}(${status.args.join(', ')}) = ${status.result} · ${status.duration_ms ?? '—'} ms`;
+        return;
+      }
+      if (status.status === 'FAILED') throw new Error(status.error || 'Task failed.');
+      output.textContent = `${status.status} · waiting for the embedded worker…`;
+    }
+    output.textContent = `Still queued. Task ${submitted.task_id} remains in the in-memory broker; reload to check the worker later.`;
+  } catch (error) {
+    output.textContent = error.message || 'Could not run the queue lab task.';
+  } finally {
+    button.disabled = !queueLabEnabled;
   }
 }
 

@@ -191,7 +191,7 @@ Access the live deployment:
 
 ### Access, demo, and persistence
 
-- The sign-in screen has a small **Preview the demo** action. Demo sessions receive a short-lived, read-only cookie and synthetic CRM data stored in a database separate from private workspace records. CRM writes and task, worker, metrics, and dead-letter APIs are unavailable in demo mode.
+- The sign-in screen has a small **Preview the demo** action. Demo sessions receive a short-lived cookie and synthetic CRM data stored separately from private workspace records. CRM writes and private task, worker, metrics, and dead-letter APIs stay unavailable. The Queue Lab allows only bounded `add` and `multiply` jobs through the hosted in-memory worker; these results are ephemeral and never enter private task history.
 - Private workspace access is allowlisted through Supabase Auth. Public self-signup is disabled. Configure `CELERLITE_SUPABASE_URL`, `CELERLITE_SUPABASE_PUBLISHABLE_KEY`, `CELERLITE_AUTH_ALLOWED_USER_IDS`, and `CELERLITE_AUTH_PUBLIC_ORIGIN`; Google sign-in also requires the Google provider and callback allowlist in Supabase. See [authentication setup](docs/AUTHENTICATION.md).
 - The Render free service has no persistent local disk. Without a separately configured durable `CELERLITE_DATABASE_URL` or `DATABASE_URL`, private CRM and task records can disappear after a restart. Demo data is synthetic and can be recreated from seed data.
 

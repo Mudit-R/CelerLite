@@ -14,6 +14,7 @@ from celerlite.persistence.repository import TaskRepository, WorkerRepository
 from celerlite.worker.worker import get_task
 from celerlite.tasks import register_crm_tasks
 from celerlite.tasks.demo import register_demo_tasks
+from celerlite.api.routes.demo_tasks import is_public_demo_task
 
 logger = get_logger(__name__)
 
@@ -93,6 +94,10 @@ async def run_embedded_worker(
             logger.error("deserialize_failed", error=str(e))
             continue
 
+        # Public guest work is tracked only in the API's short-lived session
+        # registry. Never let caller-supplied message metadata bypass history.
+        public_demo_task = is_public_demo_task(message.task_id)
+
         start_time = time.time()
         logger.info(
             "embedded_worker_task_started",
@@ -109,14 +114,15 @@ async def run_embedded_worker(
             "queue": target_queue,
         })
 
-        try:
-            async with get_session() as session:
-                t_repo = TaskRepository(session)
-                await t_repo.update_status(
-                    message.task_id, "RUNNING", worker_id=worker_id
-                )
-        except Exception:
-            pass
+        if not public_demo_task:
+            try:
+                async with get_session() as session:
+                    t_repo = TaskRepository(session)
+                    await t_repo.update_status(
+                        message.task_id, "RUNNING", worker_id=worker_id
+                    )
+            except Exception:
+                pass
 
         # Execute
         func = get_task(message.task_name)
@@ -151,16 +157,17 @@ async def run_embedded_worker(
             await broker.store_result(message.task_id, raw_res)
             await broker.acknowledge(target_queue, raw_msg)
 
-            try:
-                async with get_session() as session:
-                    t_repo = TaskRepository(session)
-                    await t_repo.update_status(
-                        message.task_id,
-                        "SUCCESS",
-                        result_json=json.dumps(result_val),
-                    )
-            except Exception:
-                pass
+            if not public_demo_task:
+                try:
+                    async with get_session() as session:
+                        t_repo = TaskRepository(session)
+                        await t_repo.update_status(
+                            message.task_id,
+                            "SUCCESS",
+                            result_json=json.dumps(result_val),
+                        )
+                except Exception:
+                    pass
 
             await broker.publish_event({
                 "event": "task_completed",
@@ -183,16 +190,17 @@ async def run_embedded_worker(
             await broker.store_result(message.task_id, raw_res)
             await broker.acknowledge(target_queue, raw_msg)
 
-            try:
-                async with get_session() as session:
-                    t_repo = TaskRepository(session)
-                    await t_repo.update_status(
-                        message.task_id,
-                        "FAILED",
-                        error_message=error_msg,
-                    )
-            except Exception:
-                pass
+            if not public_demo_task:
+                try:
+                    async with get_session() as session:
+                        t_repo = TaskRepository(session)
+                        await t_repo.update_status(
+                            message.task_id,
+                            "FAILED",
+                            error_message=error_msg,
+                        )
+                except Exception:
+                    pass
 
             await broker.publish_event({
                 "event": "task_failed",
