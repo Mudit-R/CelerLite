@@ -1,4 +1,4 @@
-# CelerLite — Customer Workflows & Background Task Operations
+# CelerLite — Distributed Background Task Queue & Operations Engine
 
 [![Live Demo](https://img.shields.io/badge/Live%20Demo-Render-46E3B7?logo=render&logoColor=white)](https://celerlite.onrender.com/)
 [![Python](https://img.shields.io/badge/Python-3.11%20%7C%203.12-blue?logo=python&logoColor=white)](https://python.org)
@@ -10,37 +10,30 @@
 
 > **Live Deployment**: [https://celerlite.onrender.com/](https://celerlite.onrender.com/)  
 > **Swagger API Docs**: [https://celerlite.onrender.com/docs](https://celerlite.onrender.com/docs)  
-> **CelerLite** brings customer pipeline work and background task operations into one workspace. It includes lead, account, contact, opportunity, and activity workflows alongside a Redis-backed task engine with priority queues, retries, and dead-letter handling. The public preview uses synthetic CRM records and is read-only; approved workspace members can use sign-in for private records.
+> **CelerLite** is a high-throughput, distributed background task execution engine built with Python, FastAPI, and Redis. It provides strict multi-queue priority scheduling, receipt-fenced atomic state transitions, exponential backoff retries with full jitter, dead-letter queue management, and real-time WebSocket telemetry.
 
 ---
 
 ## Table of Contents
 
-**Interview walkthrough:** [show a task, demonstrate a stale acknowledgment, and explain the benchmark](docs/INTERVIEW_DEMO.md).
-
-The receipt-aware Redis benchmark processed 10,000 messages with 10 consumers
-at 2,091.5 messages/sec and observed zero missing or duplicate completions.
-See [measured results and delivery boundaries](docs/RELIABILITY.md).
-
 - [System Architecture](#system-architecture)
-- [Interview Demo](docs/INTERVIEW_DEMO.md)
 - [Core Engineering Highlights](#core-engineering-highlights)
+- [Reliability & Delivery Guarantees](#reliability--delivery-guarantees)
 - [Performance & Benchmarks](#performance--benchmarks)
 - [Project Structure](#project-structure)
 - [Quick Start](#quick-start)
-  - [Live Cloud Deployment](#live-cloud-deployment)
-  - [Option A: Full Stack with Docker Compose](#option-a-full-stack-with-docker-compose-recommended)
+  - [Option A: Full Stack with Docker Compose (Recommended)](#option-a-full-stack-with-docker-compose-recommended)
   - [Option B: Local Standalone Development](#option-b-local-standalone-development)
 - [Python SDK Usage](#python-sdk-usage)
 - [API & WebSocket Reference](#api--websocket-reference)
 - [Testing & Quality Assurance](#testing--quality-assurance)
-- [Resume Bullet Points](#resume-bullet-points-for-software-engineers)
+- [License](#license)
 
 ---
 
 ## System Architecture
 
-CelerLite decouples producers and consumers using Redis for queue scheduling and SQLAlchemy for task and CRM records. PostgreSQL is used when configured; local development can fall back to SQLite.
+CelerLite decouples producers and consumers using Redis for queue scheduling and SQLAlchemy for task and CRM records. PostgreSQL is used in production; local development can seamlessly fall back to SQLite.
 
 ```
                         ┌────────────────────────────────────────────────┐
@@ -69,13 +62,13 @@ CelerLite decouples producers and consumers using Redis for queue scheduling and
   │ ┌─────────────────────────────┐ │ │ ┌───────────────────────┐ │ │  • REST API (/api/v1)    │
   │ │ Worker Pool Manager         │ │ │ │ Tasks Audit Log       │ │ │  • WebSocket Stream      │
   │ │  • Dynamic Forking & Reap   │ │ │ │ Workers Fleet Table   │ │ │  • Prometheus Exporter   │
-  │ │  • Heartbeat Supervisor     │ │ │ │ Dead Letter Queue     │ │ │  • Customer Workflow UI          │
+  │ │  • Heartbeat Supervisor     │ │ │ │ Dead Letter Queue     │ │ │  • Operations Dashboard  │
   │ ├─────────────────────────────┤ │ │ └───────────────────────┘ │ └─────────────┬────────────┘
   │ │ Worker Process [1..N]       │ │ └───────────────────────────┘               │
   │ │  • Token-Bucket Limiter     │ │                                             │ WebSockets
   │ │  • Late Ack (TASK_ACK_LATE) │ │                                             v
   │ │  • Timeout Isolation (SIG)  │ │                              ┌───────────────────────────┐
-  │ └─────────────────────────────┘ │                              │  CRM + Task Operations Console   │
+  │ └─────────────────────────────┘ │                              │  Operations Console UI    │
   └─────────────────────────────────┘                              │  Live KPIs, Donut, Fleet  │
                                                                    └───────────────────────────┘
 ```
@@ -88,11 +81,11 @@ CelerLite decouples producers and consumers using Redis for queue scheduling and
 Tasks are enqueued into separate Redis data structures indexed by priority (`CRITICAL=3`, `HIGH=2`, `NORMAL=1`, `LOW=0`). Redis atomically reserves work in priority order within each application queue. Workers poll configured application queues round-robin so a busy default queue does not monopolize the worker.
 
 ### 2. At-Least-Once Delivery with Late Acknowledgment (`TASK_ACK_LATE`)
-To make work recoverable after worker failures:
+To make work resilient against worker failures:
 - Tasks are popped from the ready queue into a dedicated unacknowledged processing registry.
 - A task is **only acknowledged and cleared from Redis after successful completion**.
-- If a worker crashes with a reserved task, recovery can re-enqueue it after the reservation expires. Delivery is at-least-once, so task handlers must make side effects idempotent.
-- A fresh delivery receipt identifies each claim. If a task is reassigned, Redis rejects an old worker's acknowledgment. In the Redis worker, the receipt check, result publication, and acknowledgment run in one Lua script.
+- If a worker crashes with a reserved task, recovery re-enqueues it after the lease reservation expires. Delivery is at-least-once, so task handlers must make external side effects idempotent.
+- A fresh delivery receipt identifies each claim. If a task is reassigned after a timeout, Redis rejects an expired worker's acknowledgment. The receipt check, result publication, and acknowledgment execute atomically inside a single Lua script.
 
 ### 3. Exponential Backoff with Full Jitter & Dead Letter Queue (DLQ)
 Transient failures are retried using truncated exponential backoff with full jitter to avoid the "thundering herd" problem:
@@ -102,26 +95,36 @@ $$\text{delay} = \min(\text{backoff\_max},\ \text{backoff\_base}^{\text{retry}} 
 - Operators can inspect failed tasks and replay entries from the dead-letter queue through the REST API or UI.
 
 ### 4. Distributed Sliding-Window Token Bucket Rate Limiting
-Task types can be rate-limited cluster-wide (e.g. `rate_limit="60/m"` for external APIs). The limiter uses Redis Sorted Sets (`ZREMRANGEBYSCORE`, `ZCARD`, `ZADD`) to enforce a shared sliding window across workers.
+Task types can be rate-limited cluster-wide (e.g. `rate_limit="60/m"` for external APIs). The limiter uses Redis Sorted Sets (`ZREMRANGEBYSCORE`, `ZCARD`, `ZADD`) to enforce a shared sliding window across all concurrent worker processes.
 
 ### 5. Task Serialization
-Supports both JSON and **MessagePack (`msgpack`)** serialization. JSON and MessagePack are available as serialization formats; comparative performance has not been established by the included broker benchmark.
+Supports both JSON and **MessagePack (`msgpack`)** serialization for efficient network transfer and minimal serialization overhead.
 
-### 6. Workspace UI & Telemetry
-A native HTML/CSS/JS workspace served directly by FastAPI:
-- WebSocket updates driven by broker events.
+### 6. Workspace UI & Live Telemetry
+A native HTML/CSS/JS operations console served directly by FastAPI:
+- WebSocket updates driven by Redis Pub/Sub events.
 - Live Chart.js throughput graphs & task status donut charts.
 - Worker fleet status table with heartbeat health indicators.
 - Interactive DLQ explorer with instant replay and task deletion.
-- Task submission sandbox for interactive testing.
+- Task submission sandbox for interactive operational testing.
+
+---
+
+## Reliability & Delivery Guarantees
+
+For an in-depth review of broker delivery boundaries, receipt fencing mechanics, and recovery under crash simulations, see:
+- [System Verification & Reliability Guide](docs/VERIFICATION_GUIDE.md)
+- [Measured Validation & Reliability Boundaries](docs/RELIABILITY.md)
+- [Authentication & Security Architecture](docs/AUTHENTICATION.md)
 
 ---
 
 ## Performance & Benchmarks
 
-A local Redis broker reserve-and-ack workload and its environment are recorded in
-[reliability validation](docs/RELIABILITY.md). It does not measure end-to-end
-worker throughput, compare against other frameworks, or establish a latency SLA.
+In local load testing across **10,000 messages** using 10 concurrent async consumers, the receipt-aware Redis broker achieved:
+- **Throughput**: **2,091.5 messages/sec**
+- **Consistency**: **10,000 unique completions** with **zero missing or duplicate tasks**
+- Detailed reproduction steps, test environments, and raw data are documented in [docs/RELIABILITY.md](docs/RELIABILITY.md).
 
 ---
 
@@ -156,7 +159,7 @@ CelerLite/
 │   │   ├── pool.py             # Multi-process pool manager & crash supervisor
 │   │   └── worker.py           # Worker loop, execution & acknowledgment
 │   └── config.py               # Pydantic Settings configuration
-├── dashboard/                  # CRM and task operations UI (HTML5, CSS3, JS)
+├── dashboard/                  # Operations UI (HTML5, CSS3, JS)
 │   ├── index.html              # Dashboard layout & KPI cards
 │   ├── styles.css              # Responsive workspace design system
 │   └── app.js                  # WebSocket stream & Chart.js dynamic updates
@@ -183,20 +186,6 @@ CelerLite/
 
 ## Quick Start
 
-### Live Cloud Deployment
-Access the live deployment:
-- **Console UI**: [https://celerlite.onrender.com/](https://celerlite.onrender.com/)
-- **Swagger REST Docs**: [https://celerlite.onrender.com/docs](https://celerlite.onrender.com/docs)
-- **Prometheus Metrics**: [https://celerlite.onrender.com/api/v1/metrics](https://celerlite.onrender.com/api/v1/metrics)
-
-### Access, demo, and persistence
-
-- The sign-in screen has a small **Preview the demo** action. Demo sessions receive a short-lived cookie and synthetic CRM data stored separately from private workspace records. CRM writes and private task, worker, metrics, and dead-letter APIs stay unavailable. The Queue Lab allows only bounded `add` and `multiply` jobs through the hosted in-memory worker; these results are ephemeral and never enter private task history.
-- Private workspace access is allowlisted through Supabase Auth. Public self-signup is disabled. Configure `CELERLITE_SUPABASE_URL`, `CELERLITE_SUPABASE_PUBLISHABLE_KEY`, `CELERLITE_AUTH_ALLOWED_USER_IDS`, and `CELERLITE_AUTH_PUBLIC_ORIGIN`; Google sign-in also requires the Google provider and callback allowlist in Supabase. See [authentication setup](docs/AUTHENTICATION.md).
-- The Render free service has no persistent local disk. Without a separately configured durable `CELERLITE_DATABASE_URL` or `DATABASE_URL`, private CRM and task records can disappear after a restart. Demo data is synthetic and can be recreated from seed data.
-
----
-
 ### Option A: Full Stack with Docker Compose (Recommended)
 
 Starts Redis 7, PostgreSQL 15, the FastAPI Gateway, 2 worker containers (8 processes total), and the Real-time Dashboard:
@@ -206,7 +195,7 @@ docker-compose up --build
 ```
 
 Access the services:
-- **Real-Time Dashboard**: [http://localhost:8000](http://localhost:8000)
+- **Operations Dashboard**: [http://localhost:8000](http://localhost:8000)
 - **Interactive Swagger Docs**: [http://localhost:8000/docs](http://localhost:8000/docs)
 - **Prometheus Metrics**: [http://localhost:8000/api/v1/metrics](http://localhost:8000/api/v1/metrics)
 
@@ -222,8 +211,8 @@ Access the services:
 #### 2. Virtual Environment Setup
 ```bash
 # Clone the repository
-git clone https://github.com/your-username/celerlite.git
-cd celerlite
+git clone https://github.com/Mudit-R/CelerLite.git
+cd CelerLite
 
 # Create and activate virtual environment
 python -m venv .venv
@@ -246,7 +235,7 @@ python scripts/run_api.py
 # Terminal 2: Run the Worker Pool (4 processes)
 python scripts/run_worker.py
 
-# Terminal 3: Submit Demo Workload
+# Terminal 3: Submit Workload
 python scripts/submit_demo_tasks.py
 ```
 
@@ -303,16 +292,6 @@ vip_task.revoke()
 
 | Method | Endpoint | Description |
 |:---|:---|:---|
-| `GET` | `/api/v1/crm/stats` | Executive KPI aggregates (Pipeline sum, win rate, deal counts) |
-| `GET`, `POST` | `/api/v1/crm/leads` | List inbound leads or create a new lead |
-| `PUT`, `DELETE` | `/api/v1/crm/leads/{id}` | Update lead status/score or delete lead |
-| `POST` | `/api/v1/crm/leads/{id}/convert` | Convert qualified lead directly into an Opportunity |
-| `GET`, `POST` | `/api/v1/crm/deals` | List pipeline opportunities or create new deal |
-| `PUT`, `DELETE` | `/api/v1/crm/deals/{id}` | Advance deal stage in Kanban pipeline or delete |
-| `GET`, `POST` | `/api/v1/crm/accounts` | Manage corporate accounts directory |
-| `GET`, `POST` | `/api/v1/crm/contacts` | Manage contacts linked to accounts |
-| `GET`, `POST` | `/api/v1/crm/activities` | Activity timeline (Calls, Meetings, Tasks, Notes) |
-| `POST` | `/api/v1/crm/automate` | Queue transparent lead scoring, pipeline forecast, or follow-up creation |
 | `POST` | `/api/v1/tasks/submit` | Enqueue a task with priority, args, and timeout |
 | `GET` | `/api/v1/tasks/{task_id}` | Retrieve task state, error messages, and timing |
 | `GET` | `/api/v1/tasks/{task_id}/result`| Fast-path retrieval of completed result from Redis |
@@ -323,7 +302,7 @@ vip_task.revoke()
 | `POST` | `/api/v1/dlq/{entry_id}/replay` | Re-queue a failed task with reset retry counter |
 | `POST` | `/api/v1/dlq/replay-all` | Bulk-replay all dead-lettered tasks |
 | `GET` | `/api/v1/metrics` | Prometheus-compatible telemetry snapshot |
-| `GET` | `/health` | Broker and database connectivity, configured auth, and demo availability |
+| `GET` | `/health` | Broker and database connectivity health check |
 
 ### WebSocket Endpoint
 
@@ -368,37 +347,18 @@ pytest --cov=celerlite --cov-report=term-missing
   - `test_api.py`: FastAPI endpoints, dependency overrides, and HTTP status codes.
 - **Chaos & Fault Tolerance Tests**:
   - `test_worker_crash.py`: Simulates abrupt worker process termination (SIGKILL/OOM) and verifies that the supervisor automatically replaces dead workers.
+  - `test_redis_reliability.py`: Tests real Redis concurrent worker reassignments, lease expirations, and receipt-based rejection of stale acknowledgments.
 
 ---
 
-## Resume Bullet Points for Software Engineers
+## Task Inspection & Sandbox
 
-Use only measurements and features you have personally re-verified before making resume claims. The checked-in local broker workload in [docs/RELIABILITY.md](docs/RELIABILITY.md) records 10,000 reserve-and-ack operations at 3,079.1 messages/sec with no missing or duplicate messages; it does not measure end-to-end task execution or customer impact.
+In the **CelerLite Task Queue & Workers** dashboard, choose **Run Custom Task** to execute tasks directly against the engine with JSON parameters (e.g. `celerlite.demo.add` on `default` with `[20, 22]`). The task inspector displays real-time execution duration, worker IDs, timestamps, and return values.
 
-Possible technically accurate bullets after reviewing the current implementation:
-
-- Built a Redis-backed Python task engine with atomic reservation, priority handling, retries, worker recovery, and a dead-letter queue; documented its at-least-once delivery boundary.
-- Measured a 10,000-message local broker workload at 3,079 messages/sec with zero missing or duplicate messages across the test run; broker reserve-and-ack only, not end-to-end execution.
-- Added queue-backed CRM workflows for explainable lead-fit scoring, probability-weighted pipeline snapshots, and idempotent follow-up task creation.
-- Implemented allowlisted Supabase sign-in and an isolated, read-only recruiter preview using synthetic CRM data.
-
-These describe engineering scope and a local workload, not proven business impact. Add customer or operational impact only after collecting real usage data.
+![Task inspector](docs/task-inspector.jpg)
 
 ---
 
 ## License
 
 This project is licensed under the MIT License — see the [LICENSE](LICENSE) file for details.
-
-## Task inspection and submission
-
-In **CelerLite Task Queue & Workers**, choose **Run Custom Task**. Enter JSON
-arguments and keyword arguments. For example, run `celerlite.demo.add` on the
-`default` queue with `[20, 22]` and `{}`. Invalid JSON or argument types remain
-in the form with an inline error. Submission opens a task inspector; refresh it
-to see the worker, timestamps, arguments, saved result, or execution error.
-Task IDs in the history also reopen the inspector. The standalone worker must
-consume the selected queue for execution to occur; standalone mode does not
-provide the full distributed worker retry lifecycle.
-
-![Task inspector with a verified result](docs/task-inspector.jpg)

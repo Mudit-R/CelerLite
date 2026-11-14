@@ -42,7 +42,7 @@ For tests only, `CELERLITE_AUTH_REQUIRED=false` enables the legacy open demo.
 Never use that setting on a publicly accessible deployment. Existing test suites
 explicitly disable auth only in isolated fixtures.
 
-## Recruiter preview
+## Guest Demo Sandbox
 
 The public Render launcher keeps authentication enabled and exposes a separate
 **View demo** session. `POST /auth/demo` requires the exact application Origin and
@@ -56,7 +56,7 @@ sessions cannot open the private task WebSocket. Do not point the demo database
 at the private database.
 
 The Render launcher defaults the preview database to
-`sqlite+aiosqlite:////tmp/celerlite_recruiter_demo.db` and sets
+`sqlite+aiosqlite:////tmp/celerlite_guest_demo.db` and sets
 `CELERLITE_DEMO_READ_ONLY=true`. Override the URL only with another database that
 contains synthetic records and is not the private database.
 
